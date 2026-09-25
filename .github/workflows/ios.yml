@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -22,10 +22,12 @@ jobs:
 
       - name: Build and test on Simulator
         run: |
+          SIMULATOR_ID=$(xcrun simctl list devices available --json | \
+            python3 -c 'import json,sys; data=json.load(sys.stdin); print(next(device["udid"] for runtime in data["devices"].values() for device in runtime if device["name"].startswith("iPhone")))')
           xcodebuild test \
             -project BrickRain.xcodeproj \
             -scheme BrickRain \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -destination "platform=iOS Simulator,id=${SIMULATOR_ID}" \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Build device app
@@ -51,4 +53,3 @@ jobs:
           name: BrickRain-unsigned-ipa
           path: build/BrickRain-unsigned.ipa
           if-no-files-found: error
-
