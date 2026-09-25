@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var session = GameSession()
     @State private var sceneID = UUID()
+    @State private var recoveryRequest = 0
 
     var body: some View {
         ZStack {
@@ -20,15 +21,20 @@ struct ContentView: View {
                     onToggleSound: { session.soundEnabled.toggle() }
                 )
 
-                GameBoardView(session: session, sceneID: sceneID)
+                GameBoardView(session: session, sceneID: sceneID, recoveryRequest: recoveryRequest)
                     .id(sceneID)
             }
 
             if session.phase == .gameOver {
-                GameOverCard(round: session.round) {
-                    session = GameSession()
-                    sceneID = UUID()
-                }
+                GameOverCard(
+                    round: session.round,
+                    onContinue: { recoveryRequest += 1 },
+                    onRestart: {
+                        ProgressStore.clear()
+                        session = GameSession()
+                        sceneID = UUID()
+                    }
+                )
             }
         }
         .preferredColorScheme(.dark)
@@ -71,11 +77,6 @@ private struct ScoreHeader: View {
                     .foregroundStyle(.cyan)
                     .accessibilityLabel("\(ballCount) balls")
                 Spacer()
-                PowerUpKey(symbol: "+1", color: .cyan, label: "ball")
-                PowerUpKey(symbol: "↟", color: .purple, label: "spring")
-                PowerUpKey(symbol: "↕", color: .yellow, label: "vertical laser")
-                PowerUpKey(symbol: "↔", color: .orange, label: "horizontal laser")
-                PowerUpKey(symbol: "✣", color: .pink, label: "cross laser")
             }
         }
         .padding(.horizontal, 20)
@@ -108,29 +109,16 @@ private struct StatBlock: View {
     }
 }
 
-private struct PowerUpKey: View {
-    let symbol: String
-    let color: Color
-    let label: String
-
-    var body: some View {
-        Text(symbol)
-            .font(.caption2.bold())
-            .foregroundStyle(color)
-            .frame(width: 22, height: 22)
-            .overlay(Circle().stroke(color, lineWidth: 1.5))
-            .accessibilityLabel(label)
-    }
-}
-
 private struct GameBoardView: View {
     let session: GameSession
     let sceneID: UUID
+    let recoveryRequest: Int
     @State private var scene: GameScene
 
-    init(session: GameSession, sceneID: UUID) {
+    init(session: GameSession, sceneID: UUID, recoveryRequest: Int) {
         self.session = session
         self.sceneID = sceneID
+        self.recoveryRequest = recoveryRequest
         self.scene = GameScene(size: CGSize(width: 390, height: 700), session: session)
         self.scene.scaleMode = .resizeFill
     }
@@ -144,6 +132,9 @@ private struct GameBoardView: View {
                     .accessibilityHint("Clear numbered bricks before they reach the bottom.")
                     .onAppear { scene.size = proxy.size }
                     .onChange(of: proxy.size) { _, newSize in scene.size = newSize }
+                    .onChange(of: recoveryRequest) { _, _ in
+                        scene.clearBottomThreeRowsAndContinue()
+                    }
 
                 Button {
                     scene.recallAllBalls()
@@ -167,6 +158,7 @@ private struct GameBoardView: View {
 
 private struct GameOverCard: View {
     let round: Int
+    let onContinue: () -> Void
     let onRestart: () -> Void
 
     var body: some View {
@@ -175,10 +167,13 @@ private struct GameOverCard: View {
                 .font(.system(size: 34, weight: .black, design: .rounded))
             Text("You reached round \(round)")
                 .foregroundStyle(.secondary)
-            Button("PLAY AGAIN", action: onRestart)
+            Button("CLEAR BOTTOM 3 ROWS & CONTINUE", action: onContinue)
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .tint(.cyan)
+            Button("START OVER", action: onRestart)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
         }
         .padding(32)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))

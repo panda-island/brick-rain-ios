@@ -298,7 +298,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .spring:
             markActivated(pickup)
             if let body = ball.physicsBody {
-                let speed = max(hypot(body.velocity.dx, body.velocity.dy) * 1.22, 560)
+                let speed = max(hypot(body.velocity.dx, body.velocity.dy), 1)
                 let angle = CGFloat.random(in: 28...152) * .pi / 180
                 body.velocity = CGVector(
                     dx: cos(angle) * speed,
@@ -352,13 +352,36 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         activatedPowerUps.removeAll()
 
         if reachedBottom {
-            ProgressStore.clear()
+            saveProgress()
             publish(.gameOver)
         } else {
             addRow()
             saveProgress()
             publish(.ready)
         }
+    }
+
+    func clearBottomThreeRowsAndContinue() {
+        guard !isFiring, session.phase == .gameOver else { return }
+        let bricks = children.filter { $0.name == "brick" }
+        let bottomRows = Set(
+            bricks.map { Int(round(($0.position.y - floorY) / max(cellSize, 1))) }
+                .sorted()
+                .reduce(into: [Int]()) { rows, row in
+                    if rows.last != row { rows.append(row) }
+                }
+                .prefix(3)
+        )
+
+        for brick in bricks {
+            let row = Int(round((brick.position.y - floorY) / max(cellSize, 1)))
+            guard bottomRows.contains(row) else { continue }
+            brickValues[ObjectIdentifier(brick)] = nil
+            brick.removeFromParent()
+        }
+        addRow()
+        saveProgress()
+        publish(.ready)
     }
 
     private func addRow() {
@@ -368,11 +391,12 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             var column = Int.random(in: 0..<columns)
             while occupied.contains(column) { column = Int.random(in: 0..<columns) }
             occupied.insert(column)
-            let variance = Int.random(in: 0...max(1, roundNumber / 3))
+            let isDoubleStrength = roundNumber.isMultiple(of: 10) && Int.random(in: 0..<100) < 25
+            let value = isDoubleStrength ? roundNumber * 2 : roundNumber
             let shape: GameProgress.BoardObject.Kind = Int.random(in: 0..<100) < 14 ? .triangleBrick : .brick
             addBrick(
                 column: column,
-                value: roundNumber + variance,
+                value: value,
                 kind: shape,
                 orientation: shape == .triangleBrick ? Int.random(in: 0..<4) : nil
             )
@@ -428,7 +452,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             brick.physicsBody = SKPhysicsBody(polygonFrom: path)
             brick.userData = NSMutableDictionary(object: corner, forKey: "orientation" as NSString)
         } else {
-            brick = SKShapeNode(rectOf: CGSize(width: side, height: side), cornerRadius: 6)
+            brick = SKShapeNode(rectOf: CGSize(width: side, height: side))
             brick.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: side, height: side))
         }
         brick.name = "brick"
@@ -494,7 +518,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
         label.text = symbol(for: kind)
-        label.fontSize = 12
+        label.fontSize = kind == .laserVertical || kind == .laserHorizontal ? 18 : 12
         label.fontColor = color(for: kind)
         label.verticalAlignmentMode = .center
         pickup.addChild(label)
@@ -523,7 +547,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .extraBall: return "+1"
         case .spring: return "↟"
         case .laserVertical: return "┃"
-        case .laserHorizontal: return "↔"
+        case .laserHorizontal: return "━"
         case .laserCross: return "✣"
         case .brick, .triangleBrick: return ""
         }

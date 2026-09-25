@@ -46,18 +46,19 @@ jobs:
           strings "$EXECUTABLE" | grep -F "laserCross"
           strings "$EXECUTABLE" | grep -F "triangleBrick"
           strings "$EXECUTABLE" | grep -F "brickRain.savedProgress.v6"
-          printf '{"version":"1.5.0","build":"6","commit":"%s","features":"corner-triangle-bricks,persistent-round-powerups,smooth-aim-reflection,vertical-laser-icon"}\n' "$GITHUB_SHA" > "$APP_PATH/BuildIdentity.json"
+          strings "$EXECUTABLE" | grep -F "CLEAR BOTTOM 3 ROWS & CONTINUE"
+          printf '{"version":"1.6.0","build":"7","commit":"%s","features":"round-strength-bricks,bottom-three-row-recovery,constant-speed-spring,sharp-square-bricks"}\n' "$GITHUB_SHA" > "$APP_PATH/BuildIdentity.json"
 
       - name: Package unsigned IPA
         run: |
           mkdir -p build/Payload
           cp -R build/DerivedData/Build/Products/Release-iphoneos/BrickRain.app build/Payload/
           cd build
-          zip -qry BrickRain-1.5.0-6-unsigned.ipa Payload
+          zip -qry BrickRain-1.6.0-7-unsigned.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: BrickRain-1.5.0-6-unsigned-ipa
-          path: build/BrickRain-1.5.0-6-unsigned.ipa
+          name: BrickRain-1.6.0-7-unsigned-ipa
+          path: build/BrickRain-1.6.0-7-unsigned.ipa
           if-no-files-found: error
