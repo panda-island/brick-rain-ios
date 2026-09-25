@@ -24,10 +24,17 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var firstLandingX: CGFloat?
     private var aimPoint: CGPoint?
     private var isFiring = false
+    private var isTransitioning = false
     private var didSetUp = false
     private var launchTimer: Timer?
     private var brickValues: [ObjectIdentifier: Int] = [:]
     private var activatedPowerUps = Set<ObjectIdentifier>()
+    private var sceneTime: TimeInterval = 0
+    private var lastTrailTime: TimeInterval = 0
+    private var lastPopTime: TimeInterval = -1
+    private var lastComboHitTime: TimeInterval = -1
+    private var comboCount = 0
+    private var lastEffectTimes: [String: TimeInterval] = [:]
 
     init(size: CGSize, session: GameSession) {
         self.session = session
@@ -96,20 +103,20 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard !isFiring, let point = touches.first?.location(in: self), point.y > launchOrigin.y + 35 else { return }
+        guard !isFiring, !isTransitioning, let point = touches.first?.location(in: self), point.y > launchOrigin.y + 35 else { return }
         aimPoint = point
         publish(.aiming)
         drawAimGuide(to: point)
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard !isFiring, let point = touches.first?.location(in: self), point.y > launchOrigin.y + 20 else { return }
+        guard !isFiring, !isTransitioning, let point = touches.first?.location(in: self), point.y > launchOrigin.y + 20 else { return }
         aimPoint = point
         drawAimGuide(to: point)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard !isFiring, let target = aimPoint else { return }
+        guard !isFiring, !isTransitioning, let target = aimPoint else { return }
         childNode(withName: "aimGuide")?.removeFromParent()
         aimPoint = nil
         fire(toward: target)
@@ -181,6 +188,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         activeBalls = 0
         collectedBalls = 0
         firstLandingX = nil
+        comboCount = 0
+        lastComboHitTime = -1
         let direction = normalizedDirection(to: target)
         publish(.firing, canRecall: true)
         launchOne(direction: direction)
@@ -225,9 +234,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        sceneTime = currentTime
         guard isFiring else { return }
+        let shouldAddTrail = currentTime - lastTrailTime >= 0.055
+        if shouldAddTrail { lastTrailTime = currentTime }
         enumerateChildNodes(withName: "ball") { [weak self] node, _ in
             guard let self else { return }
+            if shouldAddTrail { self.addTrail(at: node.position, color: node.userData?["trailColor"] as? UIColor ?? .white) }
             if node.position.y <= self.floorY + self.ballRadius + 3,
                (node.physicsBody?.velocity.dy ?? 0) < 0 {
                 self.land(ball: node)
@@ -275,16 +288,29 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let value = brickValues[key] else { return }
         hitCount += 1
         session.hitCount = hitCount
-        if session.soundEnabled {
+        comboCount = sceneTime - lastComboHitTime < 0.72 ? comboCount + 1 : 1
+        lastComboHitTime = sceneTime
+        showCombo()
+        if session.soundEnabled, sceneTime - lastPopTime > 0.028 {
+            lastPopTime = sceneTime
             run(.playSoundFileNamed("pop.wav", waitForCompletion: false))
         }
+        emitBrickParticles(at: brick.position, color: (brick as? SKShapeNode)?.fillColor ?? .white, count: value <= 1 ? 9 : 4)
         if value <= 1 {
             brickValues[key] = nil
+            playEffect("break.wav")
             brick.run(.sequence([.scale(to: 1.18, duration: 0.04), .fadeOut(withDuration: 0.08), .removeFromParent()]))
         } else {
             brickValues[key] = value - 1
             updateBrick(brick, value: value - 1)
-            brick.run(.sequence([.scale(to: 0.93, duration: 0.025), .scale(to: 1, duration: 0.04)]))
+            if let label = brick.childNode(withName: "value") {
+                label.removeAction(forKey: "numberPulse")
+                label.run(.sequence([.scale(to: 1.35, duration: 0.035), .scale(to: 1, duration: 0.08)]), withKey: "numberPulse")
+            }
+        }
+        if comboCount.isMultiple(of: 10) {
+            shake(intensity: min(5, CGFloat(comboCount) / 8))
+            if session.hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
         }
     }
 
@@ -295,8 +321,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .extraBall:
             pickup.removeFromParent()
             collectedBalls += 1
+            playEffect("pickup.wav")
         case .spring:
             markActivated(pickup)
+            playEffect("spring.wav")
             if let body = ball.physicsBody {
                 let speed = max(hypot(body.velocity.dx, body.velocity.dy), 1)
                 let angle = CGFloat.random(in: 28...152) * .pi / 180
@@ -304,9 +332,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                     dx: cos(angle) * speed,
                     dy: sin(angle) * speed
                 )
+                if ball.userData == nil { ball.userData = NSMutableDictionary() }
+                ball.userData?["trailColor"] = color(for: kind)
             }
         case .laserVertical, .laserHorizontal, .laserCross:
             markActivated(pickup)
+            playEffect("laser.wav")
+            if session.hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+            shake(intensity: 4)
             fireLaser(kind, from: pickup.position)
         case .brick, .triangleBrick:
             break
@@ -324,8 +357,86 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         pickup.alpha = 0.55
     }
 
+    private func playEffect(_ name: String) {
+        guard session.soundEnabled else { return }
+        guard sceneTime - (lastEffectTimes[name] ?? -1) > 0.06 else { return }
+        lastEffectTimes[name] = sceneTime
+        run(.playSoundFileNamed(name, waitForCompletion: false))
+    }
+
+    private func addTrail(at position: CGPoint, color: UIColor) {
+        let trail = SKShapeNode(circleOfRadius: 2.3)
+        trail.position = position
+        trail.fillColor = color.withAlphaComponent(0.72)
+        trail.strokeColor = .clear
+        trail.zPosition = 3
+        trail.run(.sequence([
+            .group([.scale(to: 0.15, duration: 0.18), .fadeOut(withDuration: 0.18)]),
+            .removeFromParent()
+        ]))
+        addChild(trail)
+    }
+
+    private func emitBrickParticles(at position: CGPoint, color: UIColor, count: Int) {
+        for _ in 0..<count {
+            let shard = SKShapeNode(rectOf: CGSize(width: 3.5, height: 3.5))
+            shard.position = position
+            shard.fillColor = color
+            shard.strokeColor = .clear
+            shard.zPosition = 18
+            let angle = CGFloat.random(in: 0...(2 * .pi))
+            let distance = CGFloat.random(in: 13...31)
+            shard.run(.sequence([
+                .group([
+                    .moveBy(x: cos(angle) * distance, y: sin(angle) * distance, duration: 0.2),
+                    .rotate(byAngle: CGFloat.random(in: -2...2), duration: 0.2),
+                    .fadeOut(withDuration: 0.2),
+                    .scale(to: 0.25, duration: 0.2)
+                ]),
+                .removeFromParent()
+            ]))
+            addChild(shard)
+        }
+    }
+
+    private func showCombo() {
+        guard comboCount >= 3 else { return }
+        let label: SKLabelNode
+        if let existing = childNode(withName: "comboLabel") as? SKLabelNode {
+            label = existing
+        } else {
+            label = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+            label.name = "comboLabel"
+            label.position = CGPoint(x: size.width / 2, y: topY - cellSize * 0.48)
+            label.zPosition = 60
+            addChild(label)
+        }
+        label.text = "COMBO ×\(comboCount)"
+        label.fontSize = min(30, 17 + CGFloat(comboCount) * 0.32)
+        label.fontColor = UIColor(hue: CGFloat((comboCount * 7) % 100) / 100, saturation: 0.72, brightness: 1, alpha: 1)
+        label.alpha = 1
+        label.setScale(0.82)
+        label.removeAllActions()
+        label.run(.sequence([
+            .scale(to: 1.12, duration: 0.06),
+            .scale(to: 1, duration: 0.08),
+            .wait(forDuration: 0.55),
+            .fadeOut(withDuration: 0.18)
+        ]))
+    }
+
+    private func shake(intensity: CGFloat) {
+        removeAction(forKey: "screenShake")
+        run(.sequence([
+            .moveBy(x: -intensity, y: intensity * 0.45, duration: 0.025),
+            .moveBy(x: intensity * 1.7, y: -intensity * 0.8, duration: 0.035),
+            .moveBy(x: -intensity * 0.7, y: intensity * 0.35, duration: 0.035)
+        ]), withKey: "screenShake")
+    }
+
     private func finishTurn() {
         isFiring = false
+        isTransitioning = true
         totalBalls += collectedBalls
         roundNumber += 1
         hitCount = 0
@@ -335,22 +446,33 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         var reachedBottom = false
         enumerateChildNodes(withName: "brick") { [weak self] node, _ in
             guard let self else { return }
-            node.position.y -= self.cellSize
-            if node.position.y - self.cellSize * 0.445 <= self.floorY + 8 {
+            let destinationY = node.position.y - self.cellSize
+            node.run(.moveTo(y: destinationY, duration: 0.24))
+            if destinationY - self.cellSize * 0.445 <= self.floorY + 8 {
                 reachedBottom = true
             }
         }
         enumerateChildNodes(withName: "pickup") { [weak self] node, _ in
             guard let self else { return }
             if self.activatedPowerUps.contains(ObjectIdentifier(node)) {
-                node.removeFromParent()
+                node.run(.sequence([.fadeOut(withDuration: 0.12), .removeFromParent()]))
                 return
             }
-            node.position.y -= self.cellSize
-            if node.position.y < self.floorY { node.removeFromParent() }
+            let destinationY = node.position.y - self.cellSize
+            node.run(.moveTo(y: destinationY, duration: 0.24))
+            if destinationY < self.floorY { node.run(.sequence([.wait(forDuration: 0.24), .removeFromParent()])) }
         }
         activatedPowerUps.removeAll()
+        publish(.firing)
 
+        let didReachBottom = reachedBottom
+        run(.sequence([.wait(forDuration: 0.26), .run { [weak self] in
+            Task { @MainActor in self?.completeTurn(reachedBottom: didReachBottom) }
+        }]))
+    }
+
+    private func completeTurn(reachedBottom: Bool) {
+        isTransitioning = false
         if reachedBottom {
             saveProgress()
             publish(.gameOver)
@@ -385,6 +507,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func addRow() {
+        if roundNumber.isMultiple(of: 10) { showRoundBanner() }
         var occupied = Set<Int>()
         let brickCount = Int.random(in: 2...5)
         for _ in 0..<brickCount {
@@ -456,7 +579,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             brick.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: side, height: side))
         }
         brick.name = "brick"
-        brick.position = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: brickSpawnY)
+        let destination = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: brickSpawnY)
+        brick.position = destination
         brick.lineWidth = 2
         if brick.userData == nil { brick.userData = NSMutableDictionary() }
         brick.userData?["shape"] = kind.rawValue
@@ -472,9 +596,23 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         label.name = "value"
         label.verticalAlignmentMode = .center
         label.fontSize = min(22, cellSize * 0.34)
+        if kind == .triangleBrick {
+            let inset = side / 6
+            switch orientation ?? (brick.userData?["orientation"] as? Int ?? 0) {
+            case 0: label.position = CGPoint(x: -inset, y: inset)
+            case 1: label.position = CGPoint(x: inset, y: inset)
+            case 2: label.position = CGPoint(x: inset, y: -inset)
+            default: label.position = CGPoint(x: -inset, y: -inset)
+            }
+        }
         brick.addChild(label)
         updateBrick(brick, value: value)
         addChild(brick)
+        if position == nil {
+            brick.alpha = 0
+            brick.position.y += cellSize * 0.4
+            brick.run(.group([.fadeIn(withDuration: 0.2), .moveTo(y: destination.y, duration: 0.24)]))
+        }
     }
 
     private func updateBrick(_ brick: SKNode, value: Int) {
@@ -505,7 +643,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     ) {
         let pickup = SKShapeNode(circleOfRadius: min(14, cellSize * 0.22))
         pickup.name = "pickup"
-        pickup.position = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: brickSpawnY)
+        let destination = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: brickSpawnY)
+        pickup.position = destination
         pickup.fillColor = .clear
         pickup.strokeColor = color(for: kind)
         pickup.lineWidth = 2
@@ -523,6 +662,31 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         label.verticalAlignmentMode = .center
         pickup.addChild(label)
         addChild(pickup)
+        if position == nil {
+            pickup.alpha = 0
+            pickup.position.y += cellSize * 0.4
+            pickup.run(.group([.fadeIn(withDuration: 0.2), .moveTo(y: destination.y, duration: 0.24)]))
+        }
+    }
+
+    private func showRoundBanner() {
+        let label = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+        label.text = "ROUND \(roundNumber)"
+        label.fontSize = 36
+        label.fontColor = .systemYellow
+        label.position = CGPoint(x: size.width / 2, y: size.height * 0.58)
+        label.zPosition = 80
+        label.alpha = 0
+        label.setScale(0.55)
+        label.run(.sequence([
+            .group([.fadeIn(withDuration: 0.12), .scale(to: 1.12, duration: 0.18)]),
+            .scale(to: 1, duration: 0.08),
+            .wait(forDuration: 0.55),
+            .group([.fadeOut(withDuration: 0.2), .moveBy(x: 0, y: 18, duration: 0.2)]),
+            .removeFromParent()
+        ]))
+        addChild(label)
+        if session.hapticsEnabled { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     }
 
     private func powerUpKind(for node: SKNode) -> GameProgress.BoardObject.Kind {
@@ -562,7 +726,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             let sameRow = abs(node.position.y - origin.y) < cellSize * 0.48
             return (vertical && sameColumn) || (horizontal && sameRow)
         }
-        targets.forEach(hit)
+        for target in targets {
+            flashBrick(target)
+            hit(brick: target)
+        }
 
         if vertical {
             addLaserBeam(from: CGPoint(x: origin.x, y: floorY), to: CGPoint(x: origin.x, y: topY), color: color(for: kind))
@@ -576,13 +743,48 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let path = CGMutablePath()
         path.move(to: start)
         path.addLine(to: end)
+        let charge = SKShapeNode(path: path)
+        charge.strokeColor = .white.withAlphaComponent(0.75)
+        charge.lineWidth = 1
+        charge.glowWidth = 2
+        charge.zPosition = 19
+        charge.run(.sequence([.wait(forDuration: 0.065), .removeFromParent()]))
+        addChild(charge)
+
         let beam = SKShapeNode(path: path)
         beam.strokeColor = color
-        beam.lineWidth = 5
-        beam.glowWidth = 7
+        beam.lineWidth = 2
+        beam.glowWidth = 10
         beam.zPosition = 20
-        beam.run(.sequence([.fadeOut(withDuration: 0.22), .removeFromParent()]))
+        beam.alpha = 0
+        beam.run(.sequence([
+            .wait(forDuration: 0.055),
+            .fadeIn(withDuration: 0.025),
+            .customAction(withDuration: 0.07) { node, elapsed in
+                (node as? SKShapeNode)?.lineWidth = 2 + 7 * elapsed / 0.07
+            },
+            .fadeOut(withDuration: 0.2),
+            .removeFromParent()
+        ]))
         addChild(beam)
+
+        let burst = SKShapeNode(circleOfRadius: 7)
+        burst.position = start
+        burst.strokeColor = color
+        burst.lineWidth = 3
+        burst.zPosition = 21
+        burst.run(.sequence([.group([.scale(to: 3, duration: 0.2), .fadeOut(withDuration: 0.2)]), .removeFromParent()]))
+        addChild(burst)
+    }
+
+    private func flashBrick(_ brick: SKNode) {
+        guard let shape = brick as? SKShapeNode else { return }
+        shape.removeAction(forKey: "laserFlash")
+        shape.run(.sequence([
+            .customAction(withDuration: 0.09) { node, elapsed in
+                (node as? SKShapeNode)?.glowWidth = 12 * (1 - elapsed / 0.09)
+            }
+        ]), withKey: "laserFlash")
     }
 
     private func makeProgress() -> GameProgress {

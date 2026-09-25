@@ -17,7 +17,13 @@ final class GameSession {
     var bestRound = UserDefaults.standard.integer(forKey: "bestRound")
     var phase: Phase = .ready
     var soundEnabled = true
+    var hapticsEnabled = UserDefaults.standard.object(forKey: "hapticsEnabled") as? Bool ?? true
     var canRecall = false
+
+    func toggleHaptics() {
+        hapticsEnabled.toggle()
+        UserDefaults.standard.set(hapticsEnabled, forKey: "hapticsEnabled")
+    }
 
     func update(round: Int, ballCount: Int, hitCount: Int, phase: Phase, canRecall: Bool = false) {
         self.round = round

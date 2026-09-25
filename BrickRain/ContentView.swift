@@ -18,7 +18,9 @@ struct ContentView: View {
                     hitCount: session.hitCount,
                     bestRound: session.bestRound,
                     soundEnabled: session.soundEnabled,
-                    onToggleSound: { session.soundEnabled.toggle() }
+                    hapticsEnabled: session.hapticsEnabled,
+                    onToggleSound: { session.soundEnabled.toggle() },
+                    onToggleHaptics: { session.toggleHaptics() }
                 )
 
                 GameBoardView(session: session, sceneID: sceneID, recoveryRequest: recoveryRequest)
@@ -48,7 +50,9 @@ private struct ScoreHeader: View {
     let hitCount: Int
     let bestRound: Int
     let soundEnabled: Bool
+    let hapticsEnabled: Bool
     let onToggleSound: () -> Void
+    let onToggleHaptics: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
@@ -69,6 +73,12 @@ private struct ScoreHeader: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(soundEnabled ? "Mute sound" : "Enable sound")
+                Button(action: onToggleHaptics) {
+                    Image(systemName: hapticsEnabled ? "waveform.path" : "waveform.path.badge.minus")
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(hapticsEnabled ? "Disable vibration" : "Enable vibration")
             }
 
             HStack(spacing: 12) {
