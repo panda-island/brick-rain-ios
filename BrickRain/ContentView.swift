@@ -46,6 +46,14 @@ private struct ScoreHeader: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            Text("BRICK RAIN • UPDATE 1.3 ACTIVE")
+                .font(.caption.bold())
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .background(.yellow)
+                .accessibilityLabel("Brick Rain update 1.3 active")
+
             HStack(spacing: 16) {
                 StatBlock(title: "ROUND", value: round, prominent: true)
                 StatBlock(title: "HITS", value: hitCount)

@@ -22,11 +22,11 @@ open BrickRain.xcodeproj
 
 最低支援 iOS 17。專案使用 SwiftUI 管理介面與狀態，SpriteKit 負責即時物理與繪製。
 
-目前版本：`1.2.0 (3)`。每次功能更新都會同步提高 App 的版本或 build number。
+目前版本：`1.3.0 (4)`。這個版本使用新的 bundle identifier，以避免側載工具沿用舊 App 容器；每次功能更新都會同步提高 App 的版本或 build number。
 
 ## 下載 IPA
 
-GitHub Actions 在每次推送與手動執行時會測試、建置並產生 `BrickRain-unsigned.ipa` artifact。這個檔案已包含真機 arm64 程式，但尚未由個人 Apple 憑證簽署；可用 AltStore、SideStore、Sideloadly 或其他簽名工具以自己的 Apple ID 簽署後安裝。
+GitHub Actions 在每次推送與手動執行時會編譯、驗證新功能字串並產生帶版本號的 IPA artifact。這個檔案已包含真機 arm64 程式，但尚未由個人 Apple 憑證簽署；可用 AltStore、SideStore、Sideloadly 或其他簽名工具以自己的 Apple ID 簽署後安裝。
 
 標準 iOS 安裝必須使用與裝置相符的 Apple 憑證與描述檔。基於安全考量，憑證不應提交到版本庫；若要讓 Actions 直接輸出已簽名 IPA，可在 repository secrets 加入憑證與 provisioning profile，再擴充 workflow 的 signing 步驟。
 

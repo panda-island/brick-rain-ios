@@ -6,8 +6,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: 5.10
-    CURRENT_PROJECT_VERSION: 3
-    MARKETING_VERSION: 1.2.0
+    CURRENT_PROJECT_VERSION: 4
+    MARKETING_VERSION: 1.3.0
 targets:
   BrickRain:
     type: application
@@ -16,10 +16,10 @@ targets:
       - path: BrickRain
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.brickrain.game
+        PRODUCT_BUNDLE_IDENTIFIER: com.pandaisland.brickrain.v13
         PRODUCT_NAME: BrickRain
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Brick Rain
+        INFOPLIST_KEY_CFBundleDisplayName: Brick Rain 1.3
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIRequiresFullScreen: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
