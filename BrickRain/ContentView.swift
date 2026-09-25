@@ -14,7 +14,6 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 ScoreHeader(
                     round: session.round,
-                    ballCount: session.ballCount,
                     hitCount: session.hitCount,
                     bestRound: session.bestRound,
                     soundEnabled: session.soundEnabled,
@@ -46,7 +45,6 @@ struct ContentView: View {
 
 private struct ScoreHeader: View {
     let round: Int
-    let ballCount: Int
     let hitCount: Int
     let bestRound: Int
     let soundEnabled: Bool
@@ -55,39 +53,29 @@ private struct ScoreHeader: View {
     let onToggleHaptics: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 16) {
-                StatBlock(title: "ROUND", value: round, prominent: true)
-                StatBlock(title: "HITS", value: hitCount)
-                    .accessibilityLabel("Total hits \(hitCount)")
-                Spacer(minLength: 4)
-                VStack(alignment: .trailing, spacing: 1) {
-                    StatBlock(title: "BEST", value: bestRound)
-                    Text(appVersion)
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                }
-                Button(action: onToggleSound) {
-                    Image(systemName: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                        .frame(width: 34, height: 34)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(soundEnabled ? "Mute sound" : "Enable sound")
-                Button(action: onToggleHaptics) {
-                    Image(systemName: hapticsEnabled ? "waveform.path" : "waveform.path.badge.minus")
-                        .frame(width: 34, height: 34)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(hapticsEnabled ? "Disable vibration" : "Enable vibration")
+        HStack(spacing: 16) {
+            StatBlock(title: "ROUND", value: round, prominent: true)
+            StatBlock(title: "HITS", value: hitCount)
+                .accessibilityLabel("Total hits \(hitCount)")
+            Spacer(minLength: 4)
+            VStack(alignment: .trailing, spacing: 1) {
+                StatBlock(title: "BEST", value: bestRound)
+                Text(appVersion)
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.tertiary)
             }
-
-            HStack(spacing: 12) {
-                Label("\(ballCount)", systemImage: "circle.fill")
-                    .font(.subheadline.bold().monospacedDigit())
-                    .foregroundStyle(.cyan)
-                    .accessibilityLabel("\(ballCount) balls")
-                Spacer()
+            Button(action: onToggleSound) {
+                Image(systemName: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .frame(width: 34, height: 34)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(soundEnabled ? "Mute sound" : "Enable sound")
+            Button(action: onToggleHaptics) {
+                Image(systemName: hapticsEnabled ? "waveform.path" : "waveform.path.badge.minus")
+                    .frame(width: 34, height: 34)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(hapticsEnabled ? "Disable vibration" : "Enable vibration")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

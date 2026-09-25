@@ -89,7 +89,19 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         launchMarker.fillColor = .white
         launchMarker.strokeColor = .clear
         launchMarker.position = launchOrigin
+
+        let remainingLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        remainingLabel.name = "remainingBallsLabel"
+        remainingLabel.text = "×\(totalBalls)"
+        remainingLabel.fontSize = 15
+        remainingLabel.fontColor = .white
+        remainingLabel.horizontalAlignmentMode = .left
+        remainingLabel.verticalAlignmentMode = .center
+        remainingLabel.position = CGPoint(x: ballRadius + 7, y: 0)
+        remainingLabel.zPosition = 6
+        launchMarker.addChild(remainingLabel)
         addChild(launchMarker)
+        updateRemainingBallLabel(totalBalls)
     }
 
     private func addWall(from start: CGPoint, to end: CGPoint) {
@@ -185,6 +197,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private func fire(toward target: CGPoint) {
         isFiring = true
         ballsToLaunch = totalBalls
+        updateRemainingBallLabel(totalBalls)
         activeBalls = 0
         collectedBalls = 0
         firstLandingX = nil
@@ -210,6 +223,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private func launchOne(direction: CGVector) {
         guard ballsToLaunch > 0 else { return }
         ballsToLaunch -= 1
+        updateRemainingBallLabel(ballsToLaunch)
         activeBalls += 1
 
         let ball = SKShapeNode(circleOfRadius: ballRadius)
@@ -265,6 +279,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         launchTimer?.invalidate()
         launchTimer = nil
         ballsToLaunch = 0
+        updateRemainingBallLabel(0)
         if firstLandingX == nil {
             firstLandingX = launchOrigin.x
         }
@@ -442,6 +457,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         hitCount = 0
         launchOrigin.x = firstLandingX ?? launchOrigin.x
         childNode(withName: "launchMarker")?.position = launchOrigin
+        updateRemainingBallLabel(totalBalls)
 
         var reachedBottom = false
         enumerateChildNodes(withName: "brick") { [weak self] node, _ in
@@ -481,6 +497,15 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             saveProgress()
             publish(.ready)
         }
+    }
+
+    private func updateRemainingBallLabel(_ count: Int) {
+        guard let label = childNode(withName: "//remainingBallsLabel") as? SKLabelNode else { return }
+        label.text = "×\(max(0, count))"
+        label.isHidden = count <= 0
+        let placeOnLeft = launchOrigin.x > size.width - 64
+        label.horizontalAlignmentMode = placeOnLeft ? .right : .left
+        label.position.x = placeOnLeft ? -(ballRadius + 7) : ballRadius + 7
     }
 
     func clearBottomThreeRowsAndContinue() {
@@ -827,6 +852,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         hitCount = max(0, progress.hitCount)
         launchOrigin.x = CGFloat(progress.launchXFraction) * size.width
         childNode(withName: "launchMarker")?.position = launchOrigin
+        updateRemainingBallLabel(totalBalls)
 
         for object in progress.objects {
             let position = CGPoint(
