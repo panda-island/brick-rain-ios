@@ -351,7 +351,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         if occupied.count < columns, Int.random(in: 0..<100) < 82 {
             var column = Int.random(in: 0..<columns)
             while occupied.contains(column) { column = Int.random(in: 0..<columns) }
-            addPowerUp(column: column, kind: randomPowerUp())
+            let kind: GameProgress.BoardObject.Kind = roundNumber == 1
+                ? [.spring, .laserVertical, .laserHorizontal, .laserCross].randomElement() ?? .spring
+                : randomPowerUp()
+            addPowerUp(column: column, kind: kind)
         }
     }
 
