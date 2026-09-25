@@ -77,6 +77,9 @@ private struct ScoreHeader: View {
                     .foregroundStyle(.secondary)
                 Text("\(bestRound)")
                     .font(.headline.monospacedDigit())
+                Text(appVersion)
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.tertiary)
             }
 
             Button(action: onToggleSound) {
@@ -89,6 +92,12 @@ private struct ScoreHeader: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(.black.opacity(0.22))
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return "v\(version) (\(build))"
     }
 }
 

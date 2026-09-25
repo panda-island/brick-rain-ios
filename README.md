@@ -22,6 +22,8 @@ open BrickRain.xcodeproj
 
 最低支援 iOS 17。專案使用 SwiftUI 管理介面與狀態，SpriteKit 負責即時物理與繪製。
 
+目前版本：`1.1.0 (2)`。每次功能更新都會同步提高 App 的版本或 build number。
+
 ## 下載 IPA
 
 GitHub Actions 在每次推送與手動執行時會測試、建置並產生 `BrickRain-unsigned.ipa` artifact。這個檔案已包含真機 arm64 程式，但尚未由個人 Apple 憑證簽署；可用 AltStore、SideStore、Sideloadly 或其他簽名工具以自己的 Apple ID 簽署後安裝。
@@ -31,4 +33,3 @@ GitHub Actions 在每次推送與手動執行時會測試、建置並產生 `Bri
 ## 原創聲明
 
 本專案只重現經典彈球打磚塊的玩法概念，沒有使用 BBTAN 的名稱、程式碼、美術、音效或商標素材。
-

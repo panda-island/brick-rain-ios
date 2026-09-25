@@ -64,6 +64,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private var floorY: CGFloat { max(28, size.height * 0.045) }
     private var topY: CGFloat { size.height - 12 }
+    // Keep one full cell between the top wall and the first row. Balls can use
+    // this corridor to travel across the board and bounce back into bricks.
+    private var brickSpawnY: CGFloat { topY - cellSize * 1.5 }
 
     private func configureBoard() {
         cellSize = size.width / CGFloat(columns)
@@ -356,7 +359,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let side = cellSize * 0.89
         let brick = SKShapeNode(rectOf: CGSize(width: side, height: side), cornerRadius: 6)
         brick.name = "brick"
-        brick.position = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: topY - cellSize * 0.52)
+        brick.position = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: brickSpawnY)
         brick.lineWidth = 2
         brick.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: side, height: side))
         brick.physicsBody?.isDynamic = false
@@ -405,7 +408,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     ) {
         let pickup = SKShapeNode(circleOfRadius: min(14, cellSize * 0.22))
         pickup.name = "pickup"
-        pickup.position = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: topY - cellSize * 0.52)
+        pickup.position = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: brickSpawnY)
         pickup.fillColor = .clear
         pickup.strokeColor = color(for: kind)
         pickup.lineWidth = 2
