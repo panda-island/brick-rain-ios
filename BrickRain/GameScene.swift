@@ -27,6 +27,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var didSetUp = false
     private var launchTimer: Timer?
     private var brickValues: [ObjectIdentifier: Int] = [:]
+    private var activatedPowerUps = Set<ObjectIdentifier>()
 
     init(size: CGSize, session: GameSession) {
         self.session = session
@@ -125,29 +126,38 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         var direction = normalizedDirection(to: target)
         var point = launchOrigin
         let path = CGMutablePath()
-        for _ in 1...32 {
-            let distance: CGFloat = 24
-            var next = CGPoint(
+        path.move(to: point)
+
+        // Trace the actual ray to each wall instead of stepping in fixed-size
+        // jumps. This keeps the reflected preview stable while the finger moves.
+        for _ in 0..<8 {
+            let topDistance = (topY - point.y) / max(direction.dy, 0.0001)
+            let sideDistance: CGFloat
+            if direction.dx > 0.0001 {
+                sideDistance = (size.width - ballRadius - point.x) / direction.dx
+            } else if direction.dx < -0.0001 {
+                sideDistance = (ballRadius - point.x) / direction.dx
+            } else {
+                sideDistance = .greatestFiniteMagnitude
+            }
+
+            let distance = min(topDistance, sideDistance)
+            guard distance.isFinite, distance > 0 else { break }
+            point = CGPoint(
                 x: point.x + direction.dx * distance,
                 y: point.y + direction.dy * distance
             )
-            if next.x <= ballRadius || next.x >= size.width - ballRadius {
-                next.x = min(max(next.x, ballRadius), size.width - ballRadius)
-                direction.dx *= -1
-            }
-            guard next.y < topY else { break }
-            path.addEllipse(in: CGRect(
-                x: next.x - 2,
-                y: next.y - 2,
-                width: 4,
-                height: 4
-            ))
-            point = next
+            path.addLine(to: point)
+            if topDistance <= sideDistance + 0.01 { break }
+            direction.dx *= -1
         }
         let guide = SKShapeNode(path: path)
         guide.name = "aimGuide"
-        guide.fillColor = .white.withAlphaComponent(0.55)
-        guide.strokeColor = .clear
+        guide.strokeColor = .white.withAlphaComponent(0.6)
+        guide.lineWidth = 2
+        guide.glowWidth = 1
+        guide.lineCap = .round
+        guide.zPosition = 30
         addChild(guide)
     }
 
@@ -281,11 +291,12 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private func collect(pickup: SKNode, ball: SKNode) {
         guard pickup.parent != nil else { return }
         let kind = powerUpKind(for: pickup)
-        pickup.removeFromParent()
         switch kind {
         case .extraBall:
+            pickup.removeFromParent()
             collectedBalls += 1
         case .spring:
+            markActivated(pickup)
             if let body = ball.physicsBody {
                 let speed = max(hypot(body.velocity.dx, body.velocity.dy) * 1.22, 560)
                 let angle = CGFloat.random(in: 28...152) * .pi / 180
@@ -295,6 +306,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 )
             }
         case .laserVertical, .laserHorizontal, .laserCross:
+            markActivated(pickup)
             fireLaser(kind, from: pickup.position)
         case .brick, .triangleBrick:
             break
@@ -305,6 +317,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         pulse.lineWidth = 2
         pulse.run(.sequence([.group([.scale(to: 2.2, duration: 0.2), .fadeOut(withDuration: 0.2)]), .removeFromParent()]))
         addChild(pulse)
+    }
+
+    private func markActivated(_ pickup: SKNode) {
+        activatedPowerUps.insert(ObjectIdentifier(pickup))
+        pickup.alpha = 0.55
     }
 
     private func finishTurn() {
@@ -325,9 +342,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         enumerateChildNodes(withName: "pickup") { [weak self] node, _ in
             guard let self else { return }
+            if self.activatedPowerUps.contains(ObjectIdentifier(node)) {
+                node.removeFromParent()
+                return
+            }
             node.position.y -= self.cellSize
             if node.position.y < self.floorY { node.removeFromParent() }
         }
+        activatedPowerUps.removeAll()
 
         if reachedBottom {
             ProgressStore.clear()
@@ -348,7 +370,12 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             occupied.insert(column)
             let variance = Int.random(in: 0...max(1, roundNumber / 3))
             let shape: GameProgress.BoardObject.Kind = Int.random(in: 0..<100) < 14 ? .triangleBrick : .brick
-            addBrick(column: column, value: roundNumber + variance, kind: shape)
+            addBrick(
+                column: column,
+                value: roundNumber + variance,
+                kind: shape,
+                orientation: shape == .triangleBrick ? Int.random(in: 0..<4) : nil
+            )
         }
 
         if occupied.count < columns {
@@ -369,18 +396,37 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         column: Int,
         value: Int,
         kind: GameProgress.BoardObject.Kind = .brick,
+        orientation: Int? = nil,
         position: CGPoint? = nil
     ) {
         let side = cellSize * 0.89
         let brick: SKShapeNode
         if kind == .triangleBrick {
+            let corner = orientation ?? Int.random(in: 0..<4)
             let path = CGMutablePath()
-            path.move(to: CGPoint(x: 0, y: side / 2))
-            path.addLine(to: CGPoint(x: -side / 2, y: -side / 2))
-            path.addLine(to: CGPoint(x: side / 2, y: -side / 2))
+            let half = side / 2
+            switch corner {
+            case 0: // upper-left
+                path.move(to: CGPoint(x: -half, y: half))
+                path.addLine(to: CGPoint(x: half, y: half))
+                path.addLine(to: CGPoint(x: -half, y: -half))
+            case 1: // upper-right
+                path.move(to: CGPoint(x: -half, y: half))
+                path.addLine(to: CGPoint(x: half, y: half))
+                path.addLine(to: CGPoint(x: half, y: -half))
+            case 2: // lower-right
+                path.move(to: CGPoint(x: half, y: half))
+                path.addLine(to: CGPoint(x: half, y: -half))
+                path.addLine(to: CGPoint(x: -half, y: -half))
+            default: // lower-left
+                path.move(to: CGPoint(x: -half, y: half))
+                path.addLine(to: CGPoint(x: half, y: -half))
+                path.addLine(to: CGPoint(x: -half, y: -half))
+            }
             path.closeSubpath()
             brick = SKShapeNode(path: path)
             brick.physicsBody = SKPhysicsBody(polygonFrom: path)
+            brick.userData = NSMutableDictionary(object: corner, forKey: "orientation" as NSString)
         } else {
             brick = SKShapeNode(rectOf: CGSize(width: side, height: side), cornerRadius: 6)
             brick.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: side, height: side))
@@ -388,7 +434,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         brick.name = "brick"
         brick.position = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: brickSpawnY)
         brick.lineWidth = 2
-        brick.userData = NSMutableDictionary(object: kind.rawValue, forKey: "shape" as NSString)
+        if brick.userData == nil { brick.userData = NSMutableDictionary() }
+        brick.userData?["shape"] = kind.rawValue
         brick.physicsBody?.isDynamic = false
         brick.physicsBody?.friction = 0
         brick.physicsBody?.restitution = 1
@@ -475,7 +522,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         switch kind {
         case .extraBall: return "+1"
         case .spring: return "↟"
-        case .laserVertical: return "↕"
+        case .laserVertical: return "┃"
         case .laserHorizontal: return "↔"
         case .laserCross: return "✣"
         case .brick, .triangleBrick: return ""
@@ -531,7 +578,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 kind: kind,
                 xFraction: Double(node.position.x / max(size.width, 1)),
                 yFraction: Double(node.position.y / max(size.height, 1)),
-                value: value
+                value: value,
+                orientation: node.userData?["orientation"] as? Int
             ))
         }
         return GameProgress(
@@ -561,7 +609,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             )
             let column = min(max(Int(position.x / max(cellSize, 1)), 0), columns - 1)
             if object.kind == .brick || object.kind == .triangleBrick {
-                addBrick(column: column, value: max(1, object.value), kind: object.kind, position: position)
+                addBrick(
+                    column: column,
+                    value: max(1, object.value),
+                    kind: object.kind,
+                    orientation: object.orientation,
+                    position: position
+                )
             } else {
                 addPowerUp(column: column, kind: object.kind, position: position)
             }

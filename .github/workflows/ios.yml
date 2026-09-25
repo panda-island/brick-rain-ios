@@ -45,19 +45,19 @@ jobs:
           strings "$EXECUTABLE" | grep -F "Recall all balls"
           strings "$EXECUTABLE" | grep -F "laserCross"
           strings "$EXECUTABLE" | grep -F "triangleBrick"
-          strings "$EXECUTABLE" | grep -F "brickRain.savedProgress.v5"
-          printf '{"version":"1.4.0","build":"5","commit":"%s","features":"per-round-plus-one,triangle-bricks,random-spring-angle,round-hits"}\n' "$GITHUB_SHA" > "$APP_PATH/BuildIdentity.json"
+          strings "$EXECUTABLE" | grep -F "brickRain.savedProgress.v6"
+          printf '{"version":"1.5.0","build":"6","commit":"%s","features":"corner-triangle-bricks,persistent-round-powerups,smooth-aim-reflection,vertical-laser-icon"}\n' "$GITHUB_SHA" > "$APP_PATH/BuildIdentity.json"
 
       - name: Package unsigned IPA
         run: |
           mkdir -p build/Payload
           cp -R build/DerivedData/Build/Products/Release-iphoneos/BrickRain.app build/Payload/
           cd build
-          zip -qry BrickRain-1.4.0-5-unsigned.ipa Payload
+          zip -qry BrickRain-1.5.0-6-unsigned.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: BrickRain-1.4.0-5-unsigned-ipa
-          path: build/BrickRain-1.4.0-5-unsigned.ipa
+          name: BrickRain-1.5.0-6-unsigned-ipa
+          path: build/BrickRain-1.5.0-6-unsigned.ipa
           if-no-files-found: error

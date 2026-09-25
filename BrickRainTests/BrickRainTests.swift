@@ -25,7 +25,7 @@ final class BrickRainTests: XCTestCase {
             ballCount: 7,
             hitCount: 88,
             launchXFraction: 0.4,
-            objects: [.init(kind: .laserCross, xFraction: 0.5, yFraction: 0.8, value: 0)]
+            objects: [.init(kind: .laserCross, xFraction: 0.5, yFraction: 0.8, value: 0, orientation: nil)]
         )
         let data = try JSONEncoder().encode(progress)
         XCTAssertEqual(try JSONDecoder().decode(GameProgress.self, from: data), progress)
