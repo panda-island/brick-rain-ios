@@ -288,15 +288,15 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .spring:
             if let body = ball.physicsBody {
                 let speed = max(hypot(body.velocity.dx, body.velocity.dy) * 1.22, 560)
-                let length = max(hypot(body.velocity.dx, body.velocity.dy), 1)
+                let angle = CGFloat.random(in: 28...152) * .pi / 180
                 body.velocity = CGVector(
-                    dx: body.velocity.dx / length * speed,
-                    dy: abs(body.velocity.dy / length * speed)
+                    dx: cos(angle) * speed,
+                    dy: sin(angle) * speed
                 )
             }
         case .laserVertical, .laserHorizontal, .laserCross:
             fireLaser(kind, from: pickup.position)
-        case .brick:
+        case .brick, .triangleBrick:
             break
         }
         let pulse = SKShapeNode(circleOfRadius: 13)
@@ -311,6 +311,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         isFiring = false
         totalBalls += collectedBalls
         roundNumber += 1
+        hitCount = 0
         launchOrigin.x = firstLandingX ?? launchOrigin.x
         childNode(withName: "launchMarker")?.position = launchOrigin
 
@@ -346,25 +347,48 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             while occupied.contains(column) { column = Int.random(in: 0..<columns) }
             occupied.insert(column)
             let variance = Int.random(in: 0...max(1, roundNumber / 3))
-            addBrick(column: column, value: roundNumber + variance)
+            let shape: GameProgress.BoardObject.Kind = Int.random(in: 0..<100) < 14 ? .triangleBrick : .brick
+            addBrick(column: column, value: roundNumber + variance, kind: shape)
         }
-        if occupied.count < columns, Int.random(in: 0..<100) < 82 {
+
+        if occupied.count < columns {
             var column = Int.random(in: 0..<columns)
             while occupied.contains(column) { column = Int.random(in: 0..<columns) }
-            let kind: GameProgress.BoardObject.Kind = roundNumber == 1
-                ? [.spring, .laserVertical, .laserHorizontal, .laserCross].randomElement() ?? .spring
-                : randomPowerUp()
-            addPowerUp(column: column, kind: kind)
+            occupied.insert(column)
+            addPowerUp(column: column, kind: .extraBall)
+        }
+
+        if occupied.count < columns, Int.random(in: 0..<100) < 58 {
+            var column = Int.random(in: 0..<columns)
+            while occupied.contains(column) { column = Int.random(in: 0..<columns) }
+            addPowerUp(column: column, kind: randomBonusPowerUp())
         }
     }
 
-    private func addBrick(column: Int, value: Int, position: CGPoint? = nil) {
+    private func addBrick(
+        column: Int,
+        value: Int,
+        kind: GameProgress.BoardObject.Kind = .brick,
+        position: CGPoint? = nil
+    ) {
         let side = cellSize * 0.89
-        let brick = SKShapeNode(rectOf: CGSize(width: side, height: side), cornerRadius: 6)
+        let brick: SKShapeNode
+        if kind == .triangleBrick {
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: 0, y: side / 2))
+            path.addLine(to: CGPoint(x: -side / 2, y: -side / 2))
+            path.addLine(to: CGPoint(x: side / 2, y: -side / 2))
+            path.closeSubpath()
+            brick = SKShapeNode(path: path)
+            brick.physicsBody = SKPhysicsBody(polygonFrom: path)
+        } else {
+            brick = SKShapeNode(rectOf: CGSize(width: side, height: side), cornerRadius: 6)
+            brick.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: side, height: side))
+        }
         brick.name = "brick"
         brick.position = position ?? CGPoint(x: (CGFloat(column) + 0.5) * cellSize, y: brickSpawnY)
         brick.lineWidth = 2
-        brick.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: side, height: side))
+        brick.userData = NSMutableDictionary(object: kind.rawValue, forKey: "shape" as NSString)
         brick.physicsBody?.isDynamic = false
         brick.physicsBody?.friction = 0
         brick.physicsBody?.restitution = 1
@@ -393,13 +417,12 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         label.fontColor = .white
     }
 
-    private func randomPowerUp() -> GameProgress.BoardObject.Kind {
+    private func randomBonusPowerUp() -> GameProgress.BoardObject.Kind {
         let roll = Int.random(in: 0..<100)
         switch roll {
-        case 0..<48: return .extraBall
-        case 48..<66: return .spring
-        case 66..<79: return .laserVertical
-        case 79..<92: return .laserHorizontal
+        case 0..<34: return .spring
+        case 34..<57: return .laserVertical
+        case 57..<80: return .laserHorizontal
         default: return .laserCross
         }
     }
@@ -444,7 +467,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .laserVertical: return .systemYellow
         case .laserHorizontal: return .systemOrange
         case .laserCross: return .systemPink
-        case .brick: return .white
+        case .brick, .triangleBrick: return .white
         }
     }
 
@@ -455,7 +478,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .laserVertical: return "↕"
         case .laserHorizontal: return "↔"
         case .laserCross: return "✣"
-        case .brick: return ""
+        case .brick, .triangleBrick: return ""
         }
     }
 
@@ -497,7 +520,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             let kind: GameProgress.BoardObject.Kind
             let value: Int
             if node.name == "brick" {
-                kind = .brick
+                let rawShape = node.userData?["shape"] as? String
+                kind = GameProgress.BoardObject.Kind(rawValue: rawShape ?? "") ?? .brick
                 value = brickValues[ObjectIdentifier(node)] ?? 1
             } else {
                 kind = powerUpKind(for: node)
@@ -536,8 +560,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 y: CGFloat(object.yFraction) * size.height
             )
             let column = min(max(Int(position.x / max(cellSize, 1)), 0), columns - 1)
-            if object.kind == .brick {
-                addBrick(column: column, value: max(1, object.value), position: position)
+            if object.kind == .brick || object.kind == .triangleBrick {
+                addBrick(column: column, value: max(1, object.value), kind: object.kind, position: position)
             } else {
                 addPowerUp(column: column, kind: object.kind, position: position)
             }

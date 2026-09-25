@@ -4,6 +4,7 @@ struct GameProgress: Codable, Equatable {
     struct BoardObject: Codable, Equatable {
         enum Kind: String, Codable {
             case brick
+            case triangleBrick
             case extraBall
             case spring
             case laserVertical
@@ -27,7 +28,7 @@ struct GameProgress: Codable, Equatable {
 enum ProgressStore {
     // Bump this key when a release changes board geometry so stale coordinates
     // cannot make an upgraded app look or behave like the previous version.
-    private static let key = "brickRain.savedProgress.v4"
+    private static let key = "brickRain.savedProgress.v5"
 
     static func load() -> GameProgress? {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
