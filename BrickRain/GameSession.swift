@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 
 @MainActor
@@ -26,4 +27,3 @@ final class GameSession {
         }
     }
 }
-
