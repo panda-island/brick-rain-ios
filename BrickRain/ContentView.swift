@@ -14,6 +14,7 @@ struct ContentView: View {
                 ScoreHeader(
                     round: session.round,
                     ballCount: session.ballCount,
+                    hitCount: session.hitCount,
                     bestRound: session.bestRound,
                     soundEnabled: session.soundEnabled,
                     onToggleSound: { session.soundEnabled.toggle() }
@@ -38,6 +39,7 @@ struct ContentView: View {
 private struct ScoreHeader: View {
     let round: Int
     let ballCount: Int
+    let hitCount: Int
     let bestRound: Int
     let soundEnabled: Bool
     let onToggleSound: () -> Void
@@ -56,6 +58,16 @@ private struct ScoreHeader: View {
                 .font(.headline.monospacedDigit())
                 .foregroundStyle(.cyan)
                 .accessibilityLabel("\(ballCount) balls")
+
+            VStack(spacing: 1) {
+                Text("HITS")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Text("\(hitCount)")
+                    .font(.headline.monospacedDigit())
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Total hits \(hitCount)")
 
             Spacer()
 
@@ -94,12 +106,29 @@ private struct GameBoardView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            SpriteView(scene: scene)
-                .ignoresSafeArea(edges: .bottom)
-                .accessibilityLabel("Brick Rain game board. Drag to aim and release to fire.")
-                .accessibilityHint("Clear numbered bricks before they reach the bottom.")
-                .onAppear { scene.size = proxy.size }
-                .onChange(of: proxy.size) { _, newSize in scene.size = newSize }
+            ZStack(alignment: .bottomTrailing) {
+                SpriteView(scene: scene)
+                    .ignoresSafeArea(edges: .bottom)
+                    .accessibilityLabel("Brick Rain game board. Drag to aim and release to fire.")
+                    .accessibilityHint("Clear numbered bricks before they reach the bottom.")
+                    .onAppear { scene.size = proxy.size }
+                    .onChange(of: proxy.size) { _, newSize in scene.size = newSize }
+
+                if session.canRecall {
+                    Button {
+                        scene.recallAllBalls()
+                    } label: {
+                        Image(systemName: "arrow.down.to.line.compact")
+                            .font(.headline.weight(.bold))
+                            .frame(width: 44, height: 44)
+                            .background(.black.opacity(0.65), in: Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.28)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(16)
+                    .accessibilityLabel("Recall all balls")
+                }
+            }
         }
     }
 }

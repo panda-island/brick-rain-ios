@@ -13,14 +13,18 @@ final class GameSession {
 
     var round = 1
     var ballCount = 1
+    var hitCount = 0
     var bestRound = UserDefaults.standard.integer(forKey: "bestRound")
     var phase: Phase = .ready
     var soundEnabled = true
+    var canRecall = false
 
-    func update(round: Int, ballCount: Int, phase: Phase) {
+    func update(round: Int, ballCount: Int, hitCount: Int, phase: Phase, canRecall: Bool = false) {
         self.round = round
         self.ballCount = ballCount
+        self.hitCount = hitCount
         self.phase = phase
+        self.canRecall = canRecall
         if round > bestRound {
             bestRound = round
             UserDefaults.standard.set(round, forKey: "bestRound")
