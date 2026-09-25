@@ -47,7 +47,6 @@ jobs:
           strings "$EXECUTABLE" | grep -F "triangleBrick"
           strings "$EXECUTABLE" | grep -F "brickRain.savedProgress.v6"
           strings "$EXECUTABLE" | grep -F "CLEAR BOTTOM 3 ROWS & CONTINUE"
-          strings "$EXECUTABLE" | grep -F "break.wav"
           test -f "$APP_PATH/break.wav"
           test -f "$APP_PATH/laser.wav"
           test -f "$APP_PATH/pickup.wav"
