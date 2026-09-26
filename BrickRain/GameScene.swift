@@ -12,6 +12,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private let session: GameSession
     private let columns = 7
     private var ballRadius: CGFloat { session.selectedBallStyle.radius }
+    private let ballSpeed: CGFloat = 520
     private let launchInterval = 0.075
     private var cellSize: CGFloat = 0
     private var roundNumber = 1
@@ -54,6 +55,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         configureBoard()
         if let progress = ProgressStore.load() {
             restore(progress)
+            saveProgress()
         } else {
             addRow()
             saveProgress()
@@ -84,10 +86,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         addWall(from: CGPoint(x: size.width, y: floorY), to: CGPoint(x: size.width, y: topY))
         addWall(from: CGPoint(x: 0, y: topY), to: CGPoint(x: size.width, y: topY))
 
-        let launchMarker = SKShapeNode(circleOfRadius: ballRadius + 2)
+        let launchMarker = makeBallNode()
         launchMarker.name = "launchMarker"
-        launchMarker.fillColor = .white
-        launchMarker.strokeColor = .clear
+        launchMarker.physicsBody = nil
         launchMarker.position = launchOrigin
 
         let remainingLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
@@ -232,7 +233,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.zPosition = 5
         ball.physicsBody?.isDynamic = true
         ball.physicsBody?.affectedByGravity = false
-        ball.physicsBody?.allowsRotation = session.selectedBallStyle == .triangle
+        ball.physicsBody?.allowsRotation = [.triangle, .hexagon, .pixel].contains(session.selectedBallStyle)
         ball.physicsBody?.friction = 0
         ball.physicsBody?.linearDamping = 0
         ball.physicsBody?.restitution = 1
@@ -240,7 +241,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.physicsBody?.categoryBitMask = Category.ball
         ball.physicsBody?.collisionBitMask = Category.brick | Category.wall
         ball.physicsBody?.contactTestBitMask = Category.brick | Category.pickup
-        ball.physicsBody?.velocity = CGVector(dx: direction.dx * 520, dy: direction.dy * 520)
+        ball.physicsBody?.velocity = CGVector(dx: direction.dx * ballSpeed, dy: direction.dy * ballSpeed)
+        ball.userData?["lastDX"] = direction.dx
+        ball.userData?["lastDY"] = direction.dy
         if session.selectedBallStyle == .triangle { ball.physicsBody?.angularVelocity = 3.8 }
         addChild(ball)
     }
@@ -286,8 +289,58 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             inset.lineWidth = 1
             ball.addChild(inset)
             ball.userData = NSMutableDictionary(object: UIColor.systemPink, forKey: "trailColor" as NSString)
+        case .comet:
+            ball = SKShapeNode(circleOfRadius: ballRadius)
+            ball.fillColor = .systemOrange
+            ball.strokeColor = .systemYellow
+            ball.lineWidth = 1.2
+            ball.glowWidth = 3
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
+            let flame = SKShapeNode(circleOfRadius: ballRadius * 0.36)
+            flame.fillColor = .systemYellow
+            flame.strokeColor = .clear
+            ball.addChild(flame)
+            ball.userData = NSMutableDictionary(object: UIColor.systemOrange, forKey: "trailColor" as NSString)
+        case .hexagon:
+            let path = regularPolygonPath(sides: 6, radius: ballRadius, rotation: .pi / 6)
+            ball = SKShapeNode(path: path)
+            ball.fillColor = .systemMint
+            ball.strokeColor = .white
+            ball.lineWidth = 1
+            ball.glowWidth = 2
+            ball.physicsBody = SKPhysicsBody(polygonFrom: path)
+            let inset = SKShapeNode(path: path)
+            inset.setScale(0.48)
+            inset.fillColor = .clear
+            inset.strokeColor = UIColor.white.withAlphaComponent(0.8)
+            inset.lineWidth = 1
+            ball.addChild(inset)
+            ball.userData = NSMutableDictionary(object: UIColor.systemMint, forKey: "trailColor" as NSString)
+        case .pixel:
+            let side = ballRadius * 1.65
+            ball = SKShapeNode(rectOf: CGSize(width: side, height: side), cornerRadius: 0.8)
+            ball.fillColor = .systemGreen
+            ball.strokeColor = .white
+            ball.lineWidth = 1
+            ball.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: side, height: side))
+            let core = SKShapeNode(rectOf: CGSize(width: side * 0.34, height: side * 0.34))
+            core.fillColor = .white
+            core.strokeColor = .clear
+            ball.addChild(core)
+            ball.userData = NSMutableDictionary(object: UIColor.systemGreen, forKey: "trailColor" as NSString)
         }
         return ball
+    }
+
+    private func regularPolygonPath(sides: Int, radius: CGFloat, rotation: CGFloat = 0) -> CGPath {
+        let path = CGMutablePath()
+        for index in 0..<sides {
+            let angle = rotation + CGFloat(index) * 2 * .pi / CGFloat(sides)
+            let point = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
+            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -301,6 +354,25 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             if node.position.y <= self.floorY + self.ballRadius + 3,
                (node.physicsBody?.velocity.dy ?? 0) < 0 {
                 self.land(ball: node)
+            }
+        }
+    }
+
+    override func didSimulatePhysics() {
+        guard isFiring else { return }
+        enumerateChildNodes(withName: "ball") { [weak self] node, _ in
+            guard let self, let body = node.physicsBody else { return }
+            let speed = hypot(body.velocity.dx, body.velocity.dy)
+            if speed > 20 {
+                let dx = body.velocity.dx / speed
+                let dy = body.velocity.dy / speed
+                body.velocity = CGVector(dx: dx * self.ballSpeed, dy: dy * self.ballSpeed)
+                node.userData?["lastDX"] = dx
+                node.userData?["lastDY"] = dy
+            } else {
+                let dx = CGFloat((node.userData?["lastDX"] as? NSNumber)?.doubleValue ?? 0)
+                let dy = CGFloat((node.userData?["lastDY"] as? NSNumber)?.doubleValue ?? 1)
+                body.velocity = CGVector(dx: dx * self.ballSpeed, dy: dy * self.ballSpeed)
             }
         }
     }
@@ -468,6 +540,15 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .triangle:
             color = .systemPink
             count = 3
+        case .comet:
+            color = .systemOrange
+            count = 8
+        case .hexagon:
+            color = .systemMint
+            count = 6
+        case .pixel:
+            color = .systemGreen
+            count = 4
         }
 
         for index in 0..<count {
@@ -724,7 +805,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             addPowerUp(column: column, kind: .extraBall)
         }
 
-        if occupied.count < columns {
+        if occupied.count < columns, Int.random(in: 0..<100) < 45 {
             var column = Int.random(in: 0..<columns)
             while occupied.contains(column) { column = Int.random(in: 0..<columns) }
             occupied.insert(column)
@@ -1007,7 +1088,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 xFraction: Double(node.position.x / max(size.width, 1)),
                 yFraction: Double(node.position.y / max(size.height, 1)),
                 value: value,
-                orientation: node.userData?["orientation"] as? Int
+                orientation: node.userData?["orientation"] as? Int,
+                rowFromSpawn: Double((brickSpawnY - node.position.y) / max(cellSize, 1))
             ))
         }
         return GameProgress(
@@ -1032,10 +1114,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         updateRemainingBallLabel(totalBalls)
 
         for object in progress.objects {
-            let position = CGPoint(
-                x: CGFloat(object.xFraction) * size.width,
-                y: CGFloat(object.yFraction) * size.height
-            )
+            let restoredY = object.rowFromSpawn.map { brickSpawnY - CGFloat($0) * cellSize }
+                ?? CGFloat(object.yFraction) * size.height
+            let position = CGPoint(x: CGFloat(object.xFraction) * size.width, y: restoredY)
             let column = min(max(Int(position.x / max(cellSize, 1)), 0), columns - 1)
             if object.kind == .brick || object.kind == .triangleBrick {
                 addBrick(

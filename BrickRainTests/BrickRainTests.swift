@@ -25,7 +25,7 @@ final class BrickRainTests: XCTestCase {
             ballCount: 7,
             hitCount: 88,
             launchXFraction: 0.4,
-            objects: [.init(kind: .laserCross, xFraction: 0.5, yFraction: 0.8, value: 0, orientation: nil)]
+            objects: [.init(kind: .laserCross, xFraction: 0.5, yFraction: 0.8, value: 0, orientation: nil, rowFromSpawn: 3)]
         )
         let data = try JSONEncoder().encode(progress)
         XCTAssertEqual(try JSONDecoder().decode(GameProgress.self, from: data), progress)
@@ -36,5 +36,10 @@ final class BrickRainTests: XCTestCase {
         let gap = cellSize * (1 - 0.89)
         XCTAssertLessThan(BallStyle.mini.radius * 2, gap)
         XCTAssertGreaterThan(BallStyle.classic.radius * 2, gap)
+    }
+
+    func testEveryDrawStyleHasAUniqueIdentifier() {
+        XCTAssertEqual(Set(BallStyle.allCases.map(\.rawValue)).count, BallStyle.allCases.count)
+        XCTAssertEqual(BallStyle.allCases.count, 6)
     }
 }

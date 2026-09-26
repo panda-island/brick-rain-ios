@@ -22,6 +22,7 @@ final class GameSession {
     var coins = BallCollectionStore.coins
     var unlockedBalls = BallCollectionStore.unlocked
     var selectedBallStyle = BallCollectionStore.selected
+    var canDrawBall: Bool { coins >= 10 && unlockedBalls.count < BallStyle.allCases.count }
 
     func toggleHaptics() {
         hapticsEnabled.toggle()
@@ -40,21 +41,15 @@ final class GameSession {
     }
 
     func drawBall() -> BallDrawResult? {
-        guard coins >= 10, let style = BallStyle.allCases.randomElement() else { return nil }
+        let lockedStyles = BallStyle.allCases.filter { !unlockedBalls.contains($0) }
+        guard coins >= 10, let style = lockedStyles.randomElement() else { return nil }
         coins -= 10
-        let result: BallDrawResult
-        if unlockedBalls.insert(style).inserted {
-            BallCollectionStore.unlocked = unlockedBalls
-            selectedBallStyle = style
-            BallCollectionStore.selected = style
-            result = .unlocked(style)
-        } else {
-            let refund = 5
-            coins += refund
-            result = .duplicate(style, refund: refund)
-        }
+        unlockedBalls.insert(style)
+        BallCollectionStore.unlocked = unlockedBalls
+        selectedBallStyle = style
+        BallCollectionStore.selected = style
         BallCollectionStore.coins = coins
-        return result
+        return .unlocked(style)
     }
 
     func update(round: Int, ballCount: Int, hitCount: Int, phase: Phase, canRecall: Bool = false) {

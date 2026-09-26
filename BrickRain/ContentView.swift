@@ -117,14 +117,16 @@ private struct HomeView: View {
 
                 Button(action: onDraw) {
                     HStack {
-                        Label("抽一顆球", systemImage: "sparkles")
+                        Label(session.unlockedBalls.count == BallStyle.allCases.count ? "球款已全數解鎖" : "抽一顆新球", systemImage: "sparkles")
                         Spacer()
-                        Text("10")
-                        Image(systemName: "circle.hexagongrid.fill").foregroundStyle(.yellow)
+                        if session.unlockedBalls.count < BallStyle.allCases.count {
+                            Text("10")
+                            Image(systemName: "circle.hexagongrid.fill").foregroundStyle(.yellow)
+                        }
                     }
                     .font(.headline.weight(.bold)).frame(maxWidth: .infinity).padding(.vertical, 10)
                 }
-                .buttonStyle(.bordered).disabled(session.coins < 10)
+                .buttonStyle(.bordered).disabled(!session.canDrawBall)
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("我的球").font(.headline.weight(.black))
@@ -177,7 +179,7 @@ private struct DrawResultCard: View {
 
     private var style: BallStyle {
         switch result {
-        case .unlocked(let style), .duplicate(let style, _): return style
+        case .unlocked(let style): return style
         }
     }
 
@@ -192,8 +194,6 @@ private struct DrawResultCard: View {
                 switch result {
                 case .unlocked:
                     Text("已解鎖並自動裝備").foregroundStyle(.secondary)
-                case .duplicate(_, let refund):
-                    Text("重複球款，返還 \(refund) 枚金幣").foregroundStyle(.yellow)
                 }
                 Button("收下", action: onDismiss).buttonStyle(.borderedProminent).tint(.cyan).controlSize(.large)
             }
@@ -214,19 +214,29 @@ private struct BallPreview: View {
             if style == .triangle {
                 Image(systemName: "triangle.fill").resizable().scaledToFit().foregroundStyle(ballColor(style))
                     .overlay(Image(systemName: "triangle").resizable().scaledToFit().foregroundStyle(.white.opacity(0.75)).padding(size * 0.21))
+            } else if style == .hexagon {
+                Image(systemName: "hexagon.fill").resizable().scaledToFit().foregroundStyle(ballColor(style))
+                    .overlay(Image(systemName: "hexagon").resizable().scaledToFit().foregroundStyle(.white.opacity(0.8)).padding(size * 0.2))
+            } else if style == .pixel {
+                RoundedRectangle(cornerRadius: size * 0.08).fill(ballColor(style))
+                    .overlay(RoundedRectangle(cornerRadius: size * 0.08).stroke(.white.opacity(0.9), lineWidth: max(1, size * 0.05)))
+                    .overlay(Image(systemName: "circle.grid.cross.fill").resizable().scaledToFit().padding(size * 0.26).foregroundStyle(.white.opacity(0.8)))
             } else {
                 Circle().fill(ballColor(style))
                     .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: max(1, size * 0.045)))
                     .overlay {
                         if style == .mini {
                             Circle().fill(.white).frame(width: size * 0.28)
+                        } else if style == .comet {
+                            Image(systemName: "flame.fill").resizable().scaledToFit().padding(size * 0.24).foregroundStyle(.yellow)
                         } else {
                             Circle().stroke(.cyan.opacity(0.9), lineWidth: max(1, size * 0.07)).padding(size * 0.24)
                         }
                     }
             }
         }
-        .frame(width: style == .mini ? size * 0.58 : size, height: style == .mini ? size * 0.58 : size)
+        .frame(width: style == .mini ? size * 0.52 : style == .pixel ? size * 0.8 : size,
+               height: style == .mini ? size * 0.52 : style == .pixel ? size * 0.8 : size)
     }
 }
 
@@ -235,6 +245,9 @@ private func ballColor(_ style: BallStyle) -> Color {
     case .classic: return .white
     case .mini: return .yellow
     case .triangle: return .pink
+    case .comet: return .orange
+    case .hexagon: return .mint
+    case .pixel: return .green
     }
 }
 
