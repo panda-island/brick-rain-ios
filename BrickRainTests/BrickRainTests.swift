@@ -42,4 +42,11 @@ final class BrickRainTests: XCTestCase {
         XCTAssertEqual(Set(BallStyle.allCases.map(\.rawValue)).count, BallStyle.allCases.count)
         XCTAssertEqual(BallStyle.allCases.count, 6)
     }
+
+    func testSavedObjectsSnapBackToWholeRows() {
+        let cellSize: CGFloat = 390 / 7
+        let spawnY: CGFloat = 700 - 12 - cellSize * 1.5
+        XCTAssertEqual(GameScene.snappedRow(positionY: spawnY - cellSize * 3.42, spawnY: spawnY, cellSize: cellSize), 3)
+        XCTAssertEqual(GameScene.snappedRow(positionY: spawnY - cellSize * 3.58, spawnY: spawnY, cellSize: cellSize), 4)
+    }
 }

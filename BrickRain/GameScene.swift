@@ -65,7 +65,16 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     override func didChangeSize(_ oldSize: CGSize) {
         guard didSetUp, oldSize.width > 0, oldSize.height > 0 else { return }
-        let progress = makeProgress()
+        // SpriteKit updates `size` before this callback. Capture nodes against
+        // the previous geometry so a height change cannot mix a new top edge
+        // with the old cell size and create fractional row spacing.
+        let previousCellSize = oldSize.width / CGFloat(columns)
+        let previousSpawnY = oldSize.height - 12 - previousCellSize * 1.5
+        let progress = makeProgress(
+            referenceSize: oldSize,
+            referenceCellSize: previousCellSize,
+            referenceSpawnY: previousSpawnY
+        )
         removeAllChildren()
         brickValues.removeAll()
         configureBoard()
@@ -77,6 +86,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     // Keep one full cell between the top wall and the first row. Balls can use
     // this corridor to travel across the board and bounce back into bricks.
     private var brickSpawnY: CGFloat { topY - cellSize * 1.5 }
+
+    static func snappedRow(positionY: CGFloat, spawnY: CGFloat, cellSize: CGFloat) -> Int {
+        max(0, Int(round((spawnY - positionY) / max(cellSize, 1))))
+    }
 
     private func configureBoard() {
         cellSize = size.width / CGFloat(columns)
@@ -1069,7 +1082,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ]), withKey: "laserFlash")
     }
 
-    private func makeProgress() -> GameProgress {
+    private func makeProgress(
+        referenceSize: CGSize? = nil,
+        referenceCellSize: CGFloat? = nil,
+        referenceSpawnY: CGFloat? = nil
+    ) -> GameProgress {
+        let savedSize = referenceSize ?? size
+        let savedCellSize = referenceCellSize ?? cellSize
+        let savedSpawnY = referenceSpawnY ?? brickSpawnY
         var objects: [GameProgress.BoardObject] = []
         for node in children where node.name == "brick" || node.name == "pickup" {
             let kind: GameProgress.BoardObject.Kind
@@ -1085,18 +1105,22 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             objects.append(.init(
                 kind: kind,
-                xFraction: Double(node.position.x / max(size.width, 1)),
-                yFraction: Double(node.position.y / max(size.height, 1)),
+                xFraction: Double(node.position.x / max(savedSize.width, 1)),
+                yFraction: Double(node.position.y / max(savedSize.height, 1)),
                 value: value,
                 orientation: node.userData?["orientation"] as? Int,
-                rowFromSpawn: Double((brickSpawnY - node.position.y) / max(cellSize, 1))
+                rowFromSpawn: Double(Self.snappedRow(
+                    positionY: node.position.y,
+                    spawnY: savedSpawnY,
+                    cellSize: savedCellSize
+                ))
             ))
         }
         return GameProgress(
             round: roundNumber,
             ballCount: totalBalls,
             hitCount: hitCount,
-            launchXFraction: Double(launchOrigin.x / max(size.width, 1)),
+            launchXFraction: Double(launchOrigin.x / max(savedSize.width, 1)),
             objects: objects
         )
     }
@@ -1114,8 +1138,15 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         updateRemainingBallLabel(totalBalls)
 
         for object in progress.objects {
-            let restoredY = object.rowFromSpawn.map { brickSpawnY - CGFloat($0) * cellSize }
-                ?? CGFloat(object.yFraction) * size.height
+            let legacyY = CGFloat(object.yFraction) * size.height
+            let rawRow = object.rowFromSpawn.map { CGFloat($0) }
+                ?? (brickSpawnY - legacyY) / max(cellSize, 1)
+            let row = Self.snappedRow(
+                positionY: brickSpawnY - rawRow * cellSize,
+                spawnY: brickSpawnY,
+                cellSize: cellSize
+            )
+            let restoredY = brickSpawnY - CGFloat(row) * cellSize
             let position = CGPoint(x: CGFloat(object.xFraction) * size.width, y: restoredY)
             let column = min(max(Int(position.x / max(cellSize, 1)), 0), columns - 1)
             if object.kind == .brick || object.kind == .triangleBrick {
