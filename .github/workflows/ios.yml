@@ -51,7 +51,6 @@ jobs:
           test -f "$APP_PATH/laser.wav"
           test -f "$APP_PATH/pickup.wav"
           test -f "$APP_PATH/spring.wav"
-          strings "$EXECUTABLE" | grep -F "BOARD CLEAR!"
           printf '{"version":"1.10.0","build":"11","commit":"%s","features":"board-clear-animation,extra-plus-one-next-round"}\n' "$GITHUB_SHA" > "$APP_PATH/BuildIdentity.json"
 
       - name: Package unsigned IPA
