@@ -46,23 +46,24 @@ jobs:
           strings "$EXECUTABLE" | grep -F "laserCross"
           strings "$EXECUTABLE" | grep -F "triangleBrick"
           strings "$EXECUTABLE" | grep -F "brickRain.savedProgress.v6"
+          strings "$EXECUTABLE" | grep -F "brickRain.coins.v1"
           strings "$EXECUTABLE" | grep -F "CLEAR BOTTOM 3 ROWS & CONTINUE"
           test -f "$APP_PATH/break.wav"
           test -f "$APP_PATH/laser.wav"
           test -f "$APP_PATH/pickup.wav"
           test -f "$APP_PATH/spring.wav"
-          printf '{"version":"1.10.0","build":"11","commit":"%s","features":"board-clear-animation,extra-plus-one-next-round"}\n' "$GITHUB_SHA" > "$APP_PATH/BuildIdentity.json"
+          printf '{"version":"1.11.0","build":"12","commit":"%s","features":"coin-pickup,ball-draw,mini-ball,triangle-ball"}\n' "$GITHUB_SHA" > "$APP_PATH/BuildIdentity.json"
 
       - name: Package unsigned IPA
         run: |
           mkdir -p build/Payload
           cp -R build/DerivedData/Build/Products/Release-iphoneos/BrickRain.app build/Payload/
           cd build
-          zip -qry BrickRain-1.10.0-11-unsigned.ipa Payload
+          zip -qry BrickRain-1.11.0-12-unsigned.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: BrickRain-1.10.0-11-unsigned-ipa
-          path: build/BrickRain-1.10.0-11-unsigned.ipa
+          name: BrickRain-1.11.0-12-unsigned-ipa
+          path: build/BrickRain-1.11.0-12-unsigned.ipa
           if-no-files-found: error

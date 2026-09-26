@@ -30,4 +30,11 @@ final class BrickRainTests: XCTestCase {
         let data = try JSONEncoder().encode(progress)
         XCTAssertEqual(try JSONDecoder().decode(GameProgress.self, from: data), progress)
     }
+
+    func testMiniBallFitsWhereClassicBallCannot() {
+        let cellSize: CGFloat = 390 / 7
+        let gap = cellSize * (1 - 0.89)
+        XCTAssertLessThan(BallStyle.mini.radius * 2, gap)
+        XCTAssertGreaterThan(BallStyle.classic.radius * 2, gap)
+    }
 }

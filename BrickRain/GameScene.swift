@@ -11,7 +11,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private let session: GameSession
     private let columns = 7
-    private let ballRadius: CGFloat = 5.5
+    private var ballRadius: CGFloat { session.selectedBallStyle.radius }
     private let launchInterval = 0.075
     private var cellSize: CGFloat = 0
     private var roundNumber = 1
@@ -226,16 +226,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         updateRemainingBallLabel(ballsToLaunch)
         activeBalls += 1
 
-        let ball = SKShapeNode(circleOfRadius: ballRadius)
+        let ball = makeBallNode()
         ball.name = "ball"
-        ball.fillColor = .white
-        ball.strokeColor = .clear
         ball.position = launchOrigin
         ball.zPosition = 5
-        ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
         ball.physicsBody?.isDynamic = true
         ball.physicsBody?.affectedByGravity = false
-        ball.physicsBody?.allowsRotation = false
+        ball.physicsBody?.allowsRotation = session.selectedBallStyle == .triangle
         ball.physicsBody?.friction = 0
         ball.physicsBody?.linearDamping = 0
         ball.physicsBody?.restitution = 1
@@ -244,7 +241,53 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.physicsBody?.collisionBitMask = Category.brick | Category.wall
         ball.physicsBody?.contactTestBitMask = Category.brick | Category.pickup
         ball.physicsBody?.velocity = CGVector(dx: direction.dx * 520, dy: direction.dy * 520)
+        if session.selectedBallStyle == .triangle { ball.physicsBody?.angularVelocity = 3.8 }
         addChild(ball)
+    }
+
+    private func makeBallNode() -> SKShapeNode {
+        let ball: SKShapeNode
+        switch session.selectedBallStyle {
+        case .classic:
+            ball = SKShapeNode(circleOfRadius: ballRadius)
+            ball.fillColor = .white
+            ball.strokeColor = .cyan
+            ball.lineWidth = 1.2
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
+            let core = SKShapeNode(circleOfRadius: ballRadius * 0.34)
+            core.fillColor = .cyan
+            core.strokeColor = .clear
+            ball.addChild(core)
+            ball.userData = NSMutableDictionary(object: UIColor.cyan, forKey: "trailColor" as NSString)
+        case .mini:
+            ball = SKShapeNode(circleOfRadius: ballRadius)
+            ball.fillColor = .systemYellow
+            ball.strokeColor = .white
+            ball.lineWidth = 0.8
+            ball.glowWidth = 2
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
+            ball.userData = NSMutableDictionary(object: UIColor.systemYellow, forKey: "trailColor" as NSString)
+        case .triangle:
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: 0, y: ballRadius))
+            path.addLine(to: CGPoint(x: -ballRadius * 0.9, y: -ballRadius * 0.72))
+            path.addLine(to: CGPoint(x: ballRadius * 0.9, y: -ballRadius * 0.72))
+            path.closeSubpath()
+            ball = SKShapeNode(path: path)
+            ball.fillColor = .systemPink
+            ball.strokeColor = .white
+            ball.lineWidth = 1
+            ball.glowWidth = 2
+            ball.physicsBody = SKPhysicsBody(polygonFrom: path)
+            let inset = SKShapeNode(path: path)
+            inset.setScale(0.42)
+            inset.fillColor = .clear
+            inset.strokeColor = UIColor.white.withAlphaComponent(0.75)
+            inset.lineWidth = 1
+            ball.addChild(inset)
+            ball.userData = NSMutableDictionary(object: UIColor.systemPink, forKey: "trailColor" as NSString)
+        }
+        return ball
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -292,6 +335,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let nodes = [contact.bodyA.node, contact.bodyB.node].compactMap { $0 }
         guard let ball = nodes.first(where: { $0.name == "ball" }) else { return }
         if let brick = nodes.first(where: { $0.name == "brick" }) {
+            showBallImpact(at: contact.contactPoint)
             hit(brick: brick)
         } else if let pickup = nodes.first(where: { $0.name == "pickup" }) {
             collect(pickup: pickup, ball: ball)
@@ -359,6 +403,12 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             if session.hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
             shake(intensity: 4)
             fireLaser(kind, from: pickup.position)
+        case .coin:
+            pickup.removeFromParent()
+            session.collectCoin()
+            playEffect("pickup.wav")
+            showCoinCollected(at: ball.position)
+            if session.hapticsEnabled { UIImpactFeedbackGenerator(style: .rigid).impactOccurred() }
         case .brick, .triangleBrick:
             break
         }
@@ -383,7 +433,17 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func addTrail(at position: CGPoint, color: UIColor) {
-        let trail = SKShapeNode(circleOfRadius: 2.3)
+        let trail: SKShapeNode
+        if session.selectedBallStyle == .triangle {
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: 0, y: 3))
+            path.addLine(to: CGPoint(x: -2.6, y: -2))
+            path.addLine(to: CGPoint(x: 2.6, y: -2))
+            path.closeSubpath()
+            trail = SKShapeNode(path: path)
+        } else {
+            trail = SKShapeNode(circleOfRadius: session.selectedBallStyle == .mini ? 1.25 : 2.3)
+        }
         trail.position = position
         trail.fillColor = color.withAlphaComponent(0.72)
         trail.strokeColor = .clear
@@ -393,6 +453,62 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             .removeFromParent()
         ]))
         addChild(trail)
+    }
+
+    private func showBallImpact(at position: CGPoint) {
+        let color: UIColor
+        let count: Int
+        switch session.selectedBallStyle {
+        case .classic:
+            color = .cyan
+            count = 1
+        case .mini:
+            color = .systemYellow
+            count = 5
+        case .triangle:
+            color = .systemPink
+            count = 3
+        }
+
+        for index in 0..<count {
+            let spark: SKShapeNode
+            if session.selectedBallStyle == .classic {
+                spark = SKShapeNode(circleOfRadius: 4)
+                spark.fillColor = .clear
+                spark.strokeColor = color
+            } else {
+                spark = SKShapeNode(rectOf: CGSize(width: session.selectedBallStyle == .mini ? 2 : 3, height: 9))
+                spark.fillColor = color
+                spark.strokeColor = .clear
+                spark.zRotation = CGFloat(index) * (2 * .pi / CGFloat(count))
+            }
+            spark.position = position
+            spark.zPosition = 24
+            let angle = CGFloat(index) * (2 * .pi / CGFloat(count)) + CGFloat.random(in: -0.25...0.25)
+            spark.run(.sequence([
+                .group([
+                    .moveBy(x: cos(angle) * 17, y: sin(angle) * 17, duration: 0.12),
+                    .scale(to: session.selectedBallStyle == .classic ? 2.4 : 0.2, duration: 0.12),
+                    .fadeOut(withDuration: 0.12)
+                ]),
+                .removeFromParent()
+            ]))
+            addChild(spark)
+        }
+    }
+
+    private func showCoinCollected(at position: CGPoint) {
+        let label = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+        label.text = "+1 COIN"
+        label.fontSize = 15
+        label.fontColor = .systemYellow
+        label.position = position
+        label.zPosition = 70
+        label.run(.sequence([
+            .group([.moveBy(x: 0, y: 34, duration: 0.45), .fadeOut(withDuration: 0.45)]),
+            .removeFromParent()
+        ]))
+        addChild(label)
     }
 
     private func emitBrickParticles(at position: CGPoint, color: UIColor, count: Int) {
@@ -608,6 +724,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             addPowerUp(column: column, kind: .extraBall)
         }
 
+        if occupied.count < columns {
+            var column = Int.random(in: 0..<columns)
+            while occupied.contains(column) { column = Int.random(in: 0..<columns) }
+            occupied.insert(column)
+            addPowerUp(column: column, kind: .coin)
+        }
+
         if occupied.count < columns, Int.random(in: 0..<100) < 58 {
             var column = Int.random(in: 0..<columns)
             while occupied.contains(column) { column = Int.random(in: 0..<columns) }
@@ -778,6 +901,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .laserVertical: return .systemYellow
         case .laserHorizontal: return .systemOrange
         case .laserCross: return .systemPink
+        case .coin: return .systemYellow
         case .brick, .triangleBrick: return .white
         }
     }
@@ -789,6 +913,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .laserVertical: return "┃"
         case .laserHorizontal: return "━"
         case .laserCross: return "✣"
+        case .coin: return "●"
         case .brick, .triangleBrick: return ""
         }
     }

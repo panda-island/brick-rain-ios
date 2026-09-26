@@ -10,6 +10,7 @@ struct GameProgress: Codable, Equatable {
             case laserVertical
             case laserHorizontal
             case laserCross
+            case coin
         }
 
         let kind: Kind
