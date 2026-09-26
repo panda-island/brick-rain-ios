@@ -32,7 +32,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var sceneTime: TimeInterval = 0
     private var lastTrailTime: TimeInterval = 0
     private var lastPopTime: TimeInterval = -1
-    private var lastComboHitTime: TimeInterval = -1
     private var comboCount = 0
     private var lastEffectTimes: [String: TimeInterval] = [:]
 
@@ -147,9 +146,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let path = CGMutablePath()
         path.move(to: point)
 
-        // Trace the actual ray to each wall instead of stepping in fixed-size
-        // jumps. This keeps the reflected preview stable while the finger moves.
-        for _ in 0..<8 {
+        // Draw the incoming segment plus one reflected segment. The guide stops
+        // at the next wall instead of predicting additional rebounds.
+        for _ in 0..<2 {
             let topDistance = (topY - point.y) / max(direction.dy, 0.0001)
             let sideDistance: CGFloat
             if direction.dx > 0.0001 {
@@ -202,7 +201,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         collectedBalls = 0
         firstLandingX = nil
         comboCount = 0
-        lastComboHitTime = -1
         let direction = normalizedDirection(to: target)
         publish(.firing, canRecall: true)
         launchOne(direction: direction)
@@ -303,9 +301,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let value = brickValues[key] else { return }
         hitCount += 1
         session.hitCount = hitCount
-        comboCount = sceneTime - lastComboHitTime < 0.72 ? comboCount + 1 : 1
-        lastComboHitTime = sceneTime
-        showCombo()
         if session.soundEnabled, sceneTime - lastPopTime > 0.028 {
             lastPopTime = sceneTime
             run(.playSoundFileNamed("pop.wav", waitForCompletion: false))
@@ -313,8 +308,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         emitBrickParticles(at: brick.position, color: (brick as? SKShapeNode)?.fillColor ?? .white, count: value <= 1 ? 9 : 4)
         if value <= 1 {
             brickValues[key] = nil
+            comboCount += 1
+            showCombo()
             playEffect("break.wav")
             brick.run(.sequence([.scale(to: 1.18, duration: 0.04), .fadeOut(withDuration: 0.08), .removeFromParent()]))
+            if comboCount.isMultiple(of: 10) {
+                shake(intensity: min(5, CGFloat(comboCount) / 8))
+                if session.hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+            }
         } else {
             brickValues[key] = value - 1
             updateBrick(brick, value: value - 1)
@@ -322,10 +323,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 label.removeAction(forKey: "numberPulse")
                 label.run(.sequence([.scale(to: 1.35, duration: 0.035), .scale(to: 1, duration: 0.08)]), withKey: "numberPulse")
             }
-        }
-        if comboCount.isMultiple(of: 10) {
-            shake(intensity: min(5, CGFloat(comboCount) / 8))
-            if session.hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
         }
     }
 
@@ -415,7 +412,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func showCombo() {
-        guard comboCount >= 3 else { return }
+        guard comboCount >= 1 else { return }
         let label: SKLabelNode
         if let existing = childNode(withName: "comboLabel") as? SKLabelNode {
             label = existing
