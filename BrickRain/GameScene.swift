@@ -1160,22 +1160,23 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         path.move(to: start)
         path.addLine(to: end)
         let charge = SKShapeNode(path: path)
-        charge.strokeColor = .white.withAlphaComponent(0.28)
+        charge.strokeColor = .white
         charge.lineWidth = 1
-        charge.glowWidth = 1
+        charge.glowWidth = 2
+        charge.alpha = 0.28
         charge.zPosition = 19
         charge.run(.sequence([.wait(forDuration: 0.065), .removeFromParent()]))
         addChild(charge)
 
         let beam = SKShapeNode(path: path)
-        beam.strokeColor = color.withAlphaComponent(0.42)
+        beam.strokeColor = color
         beam.lineWidth = 2
-        beam.glowWidth = 6
+        beam.glowWidth = 10
         beam.zPosition = 20
         beam.alpha = 0
         beam.run(.sequence([
             .wait(forDuration: 0.055),
-            .fadeIn(withDuration: 0.025),
+            .fadeAlpha(to: 0.42, duration: 0.025),
             .customAction(withDuration: 0.07) { node, elapsed in
                 (node as? SKShapeNode)?.lineWidth = 2 + 7 * elapsed / 0.07
             },
@@ -1186,8 +1187,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let burst = SKShapeNode(circleOfRadius: 7)
         burst.position = start
-        burst.strokeColor = color.withAlphaComponent(0.38)
+        burst.strokeColor = color
         burst.lineWidth = 3
+        burst.alpha = 0.38
         burst.zPosition = 21
         burst.run(.sequence([.group([.scale(to: 3, duration: 0.2), .fadeOut(withDuration: 0.2)]), .removeFromParent()]))
         addChild(burst)
