@@ -22,7 +22,7 @@ open BrickRain.xcodeproj
 
 最低支援 iOS 17。專案使用 SwiftUI 管理介面與狀態，SpriteKit 負責即時物理與繪製。
 
-目前版本：`1.9.0 (10)`。專案使用獨立 bundle identifier，以避免側載工具沿用舊 App 容器；每次功能更新都會同步提高 App 的版本或 build number。
+目前版本：`1.10.0 (11)`。專案使用獨立 bundle identifier，以避免側載工具沿用舊 App 容器；每次功能更新都會同步提高 App 的版本或 build number。
 
 ## 下載 IPA
 

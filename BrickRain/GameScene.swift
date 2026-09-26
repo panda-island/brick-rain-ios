@@ -33,6 +33,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastTrailTime: TimeInterval = 0
     private var lastPopTime: TimeInterval = -1
     private var comboCount = 0
+    private var earnedClearBonus = false
     private var lastEffectTimes: [String: TimeInterval] = [:]
 
     init(size: CGSize, session: GameSession) {
@@ -201,6 +202,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         collectedBalls = 0
         firstLandingX = nil
         comboCount = 0
+        earnedClearBonus = false
         let direction = normalizedDirection(to: target)
         publish(.firing, canRecall: true)
         launchOne(direction: direction)
@@ -312,6 +314,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             showCombo()
             playEffect("break.wav")
             brick.run(.sequence([.scale(to: 1.18, duration: 0.04), .fadeOut(withDuration: 0.08), .removeFromParent()]))
+            if brickValues.isEmpty, !earnedClearBonus {
+                earnedClearBonus = true
+                showBoardClearBonus()
+            }
             if comboCount.isMultiple(of: 10) {
                 shake(intensity: min(5, CGFloat(comboCount) / 8))
                 if session.hapticsEnabled { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
@@ -446,6 +452,51 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ]), withKey: "screenShake")
     }
 
+    private func showBoardClearBonus() {
+        childNode(withName: "boardClearBonus")?.removeFromParent()
+        let banner = SKNode()
+        banner.name = "boardClearBonus"
+        banner.position = CGPoint(x: size.width / 2, y: size.height * 0.53)
+        banner.zPosition = 90
+        banner.alpha = 0
+        banner.setScale(0.55)
+
+        let title = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+        title.text = "BOARD CLEAR!"
+        title.fontSize = 34
+        title.fontColor = .cyan
+        title.verticalAlignmentMode = .center
+        banner.addChild(title)
+
+        let reward = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        reward.text = "EXTRA +1 NEXT ROUND"
+        reward.fontSize = 16
+        reward.fontColor = .white
+        reward.position.y = -34
+        banner.addChild(reward)
+
+        let ring = SKShapeNode(circleOfRadius: 34)
+        ring.strokeColor = .cyan
+        ring.lineWidth = 3
+        ring.glowWidth = 8
+        ring.zPosition = -1
+        ring.run(.group([.scale(to: 3.2, duration: 0.55), .fadeOut(withDuration: 0.55)]))
+        banner.addChild(ring)
+
+        banner.run(.sequence([
+            .group([.fadeIn(withDuration: 0.12), .scale(to: 1.12, duration: 0.18)]),
+            .scale(to: 1, duration: 0.08),
+            .wait(forDuration: 0.72),
+            .group([.fadeOut(withDuration: 0.2), .moveBy(x: 0, y: 18, duration: 0.2)]),
+            .removeFromParent()
+        ]))
+        addChild(banner)
+        emitBrickParticles(at: banner.position, color: .cyan, count: 18)
+        shake(intensity: 6)
+        playEffect("pickup.wav")
+        if session.hapticsEnabled { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+    }
+
     private func finishTurn() {
         isFiring = false
         isTransitioning = true
@@ -459,6 +510,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         var reachedBottom = false
         enumerateChildNodes(withName: "brick") { [weak self] node, _ in
             guard let self else { return }
+            guard self.brickValues[ObjectIdentifier(node)] != nil else { return }
             let destinationY = node.position.y - self.cellSize
             node.run(.moveTo(y: destinationY, duration: 0.24))
             if destinationY - self.cellSize * 0.445 <= self.floorY + 8 {
@@ -490,7 +542,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             saveProgress()
             publish(.gameOver)
         } else {
-            addRow()
+            let extraBallCount = earnedClearBonus ? 2 : 1
+            earnedClearBonus = false
+            addRow(extraBallCount: extraBallCount)
             saveProgress()
             publish(.ready)
         }
@@ -528,7 +582,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         publish(.ready)
     }
 
-    private func addRow() {
+    private func addRow(extraBallCount: Int = 1) {
         if roundNumber.isMultiple(of: 10) { showRoundBanner() }
         var occupied = Set<Int>()
         let brickCount = Int.random(in: 2...5)
@@ -547,7 +601,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             )
         }
 
-        if occupied.count < columns {
+        for _ in 0..<min(extraBallCount, columns - occupied.count) {
             var column = Int.random(in: 0..<columns)
             while occupied.contains(column) { column = Int.random(in: 0..<columns) }
             occupied.insert(column)
@@ -817,7 +871,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             if node.name == "brick" {
                 let rawShape = node.userData?["shape"] as? String
                 kind = GameProgress.BoardObject.Kind(rawValue: rawShape ?? "") ?? .brick
-                value = brickValues[ObjectIdentifier(node)] ?? 1
+                guard let liveValue = brickValues[ObjectIdentifier(node)] else { continue }
+                value = liveValue
             } else {
                 kind = powerUpKind(for: node)
                 value = 0
