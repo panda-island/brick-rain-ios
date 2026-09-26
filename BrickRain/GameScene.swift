@@ -60,7 +60,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             addRow()
             saveProgress()
         }
-        publish(hasBrickTouchingFloor() ? .gameOver : .ready)
+        publish(hasBrickTouchingLossLine() ? .gameOver : .ready)
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -79,10 +79,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         brickValues.removeAll()
         configureBoard()
         restore(progress)
-        if hasBrickTouchingFloor() { publish(.gameOver) }
+        if hasBrickTouchingLossLine() { publish(.gameOver) }
     }
 
     private var floorY: CGFloat { max(28, size.height * 0.045) }
+    // End the run one row before a brick reaches the launch floor. This keeps
+    // the bottom lane clear enough to read and aim the next shot.
+    private var lossLineY: CGFloat { floorY + cellSize }
     private var topY: CGFloat { size.height - 12 }
     // Keep one full cell between the top wall and the first row. Balls can use
     // this corridor to travel across the board and bounce back into bricks.
@@ -827,7 +830,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             guard self.brickValues[ObjectIdentifier(node)] != nil else { return }
             let destinationY = node.position.y - self.cellSize
             node.run(.moveTo(y: destinationY, duration: 0.24))
-            if self.brickTouchesFloor(centerY: destinationY) {
+            if self.brickTouchesLossLine(centerY: destinationY) {
                 reachedBottom = true
             }
         }
@@ -864,17 +867,17 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
-    static func brickTouchesFloor(centerY: CGFloat, cellSize: CGFloat, floorY: CGFloat) -> Bool {
-        centerY - cellSize * 0.445 <= floorY + 0.5
+    static func brickTouchesLossLine(centerY: CGFloat, cellSize: CGFloat, lossLineY: CGFloat) -> Bool {
+        centerY - cellSize * 0.445 <= lossLineY + 0.5
     }
 
-    private func brickTouchesFloor(centerY: CGFloat) -> Bool {
-        Self.brickTouchesFloor(centerY: centerY, cellSize: cellSize, floorY: floorY)
+    private func brickTouchesLossLine(centerY: CGFloat) -> Bool {
+        Self.brickTouchesLossLine(centerY: centerY, cellSize: cellSize, lossLineY: lossLineY)
     }
 
-    private func hasBrickTouchingFloor() -> Bool {
+    private func hasBrickTouchingLossLine() -> Bool {
         children.contains { node in
-            node.name == "brick" && brickValues[ObjectIdentifier(node)] != nil && brickTouchesFloor(centerY: node.position.y)
+            node.name == "brick" && brickValues[ObjectIdentifier(node)] != nil && brickTouchesLossLine(centerY: node.position.y)
         }
     }
 
@@ -1157,17 +1160,17 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         path.move(to: start)
         path.addLine(to: end)
         let charge = SKShapeNode(path: path)
-        charge.strokeColor = .white.withAlphaComponent(0.75)
+        charge.strokeColor = .white.withAlphaComponent(0.28)
         charge.lineWidth = 1
-        charge.glowWidth = 2
+        charge.glowWidth = 1
         charge.zPosition = 19
         charge.run(.sequence([.wait(forDuration: 0.065), .removeFromParent()]))
         addChild(charge)
 
         let beam = SKShapeNode(path: path)
-        beam.strokeColor = color
+        beam.strokeColor = color.withAlphaComponent(0.42)
         beam.lineWidth = 2
-        beam.glowWidth = 10
+        beam.glowWidth = 6
         beam.zPosition = 20
         beam.alpha = 0
         beam.run(.sequence([
@@ -1183,7 +1186,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let burst = SKShapeNode(circleOfRadius: 7)
         burst.position = start
-        burst.strokeColor = color
+        burst.strokeColor = color.withAlphaComponent(0.38)
         burst.lineWidth = 3
         burst.zPosition = 21
         burst.run(.sequence([.group([.scale(to: 3, duration: 0.2), .fadeOut(withDuration: 0.2)]), .removeFromParent()]))

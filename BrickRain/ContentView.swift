@@ -63,8 +63,12 @@ struct ContentView: View {
                         .onTapGesture { }
                     GameOverCard(
                         round: session.round,
+                        coins: session.coins,
                         onHome: { screen = .home },
-                        onContinue: { recoveryRequest += 1 },
+                        onContinue: {
+                            guard session.spendCoins(10) else { return }
+                            recoveryRequest += 1
+                        },
                         onRestart: {
                             ProgressStore.clear()
                             let selected = session.selectedBallStyle
@@ -360,6 +364,7 @@ private struct GameBoardView: View {
 
 private struct GameOverCard: View {
     let round: Int
+    let coins: Int
     let onHome: () -> Void
     let onContinue: () -> Void
     let onRestart: () -> Void
@@ -368,8 +373,20 @@ private struct GameOverCard: View {
         VStack(spacing: 16) {
             Text("GAME OVER").font(.system(size: 34, weight: .black, design: .rounded))
             Text("You reached round \(round)").foregroundStyle(.secondary)
-            Button("CLEAR BOTTOM 3 ROWS & CONTINUE", action: onContinue)
-                .buttonStyle(.borderedProminent).controlSize(.large).tint(.cyan)
+            Button(action: onContinue) {
+                HStack(spacing: 7) {
+                    Text("CLEAR BOTTOM 3 ROWS & CONTINUE")
+                    Text("10")
+                    Image(systemName: "circle.hexagongrid.fill").foregroundStyle(.yellow)
+                }
+            }
+            .buttonStyle(.borderedProminent).controlSize(.large).tint(.cyan)
+            .disabled(coins < 10)
+            if coins < 10 {
+                Text("需要 10 枚金幣才能復活")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
             Button("START OVER", action: onRestart).buttonStyle(.bordered).controlSize(.large)
             Button("BALL LAB", action: onHome).buttonStyle(.plain).foregroundStyle(.secondary)
         }

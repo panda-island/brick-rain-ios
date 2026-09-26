@@ -50,11 +50,29 @@ final class BrickRainTests: XCTestCase {
         XCTAssertEqual(GameScene.snappedRow(positionY: spawnY - cellSize * 3.58, spawnY: spawnY, cellSize: cellSize), 4)
     }
 
-    func testBrickLosesAsSoonAsItsEdgeTouchesTheFloor() {
+    func testBrickLosesOneFullRowAboveTheFloor() {
         let cellSize: CGFloat = 56
         let floorY: CGFloat = 30
-        let touchingCenter = floorY + cellSize * 0.445
-        XCTAssertTrue(GameScene.brickTouchesFloor(centerY: touchingCenter, cellSize: cellSize, floorY: floorY))
-        XCTAssertFalse(GameScene.brickTouchesFloor(centerY: touchingCenter + 1, cellSize: cellSize, floorY: floorY))
+        let lossLineY = floorY + cellSize
+        let touchingCenter = lossLineY + cellSize * 0.445
+        XCTAssertTrue(GameScene.brickTouchesLossLine(centerY: touchingCenter, cellSize: cellSize, lossLineY: lossLineY))
+        XCTAssertFalse(GameScene.brickTouchesLossLine(centerY: touchingCenter + 1, cellSize: cellSize, lossLineY: lossLineY))
+    }
+
+    func testReviveSpendsTenPersistentCoins() {
+        let key = "brickRain.coins.v1"
+        let previous = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+
+        UserDefaults.standard.set(12, forKey: key)
+        let session = GameSession()
+        XCTAssertTrue(session.spendCoins(10))
+        XCTAssertEqual(session.coins, 2)
+        XCTAssertEqual(UserDefaults.standard.integer(forKey: key), 2)
+        XCTAssertFalse(session.spendCoins(10))
+        XCTAssertEqual(session.coins, 2)
     }
 }

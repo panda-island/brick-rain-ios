@@ -34,6 +34,14 @@ final class GameSession {
         BallCollectionStore.coins = coins
     }
 
+    @discardableResult
+    func spendCoins(_ amount: Int) -> Bool {
+        guard amount > 0, coins >= amount else { return false }
+        coins -= amount
+        BallCollectionStore.coins = coins
+        return true
+    }
+
     func selectBall(_ style: BallStyle) {
         guard unlockedBalls.contains(style) else { return }
         selectedBallStyle = style
