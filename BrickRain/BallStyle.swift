@@ -58,6 +58,13 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
         case .star: return 6.1
         }
     }
+
+    var spinsInFlight: Bool {
+        switch self {
+        case .triangle, .hexagon, .pixel, .star: return true
+        default: return false
+        }
+    }
 }
 
 enum BallDrawResult: Equatable {

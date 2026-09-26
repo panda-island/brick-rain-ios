@@ -249,12 +249,15 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let ball = makeBallNode()
         ball.name = "ball"
         ball.position = launchOrigin
-        ball.zPosition = 5
+        // Laser beams render at 20–21. Keep even the tiny ball above them so
+        // triggering a laser can never visually hide an active projectile.
+        ball.zPosition = 25
         ball.physicsBody?.isDynamic = true
         ball.physicsBody?.affectedByGravity = false
-        ball.physicsBody?.allowsRotation = [.triangle, .hexagon, .pixel, .star].contains(session.selectedBallStyle)
+        ball.physicsBody?.allowsRotation = session.selectedBallStyle.spinsInFlight
         ball.physicsBody?.friction = 0
         ball.physicsBody?.linearDamping = 0
+        ball.physicsBody?.angularDamping = 0
         ball.physicsBody?.restitution = 1
         ball.physicsBody?.usesPreciseCollisionDetection = true
         ball.physicsBody?.categoryBitMask = Category.ball
@@ -263,8 +266,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.physicsBody?.velocity = CGVector(dx: direction.dx * ballSpeed, dy: direction.dy * ballSpeed)
         ball.userData?["lastDX"] = direction.dx
         ball.userData?["lastDY"] = direction.dy
-        if session.selectedBallStyle == .triangle { ball.physicsBody?.angularVelocity = 3.8 }
-        if session.selectedBallStyle == .star { ball.physicsBody?.angularVelocity = 2.8 }
+        if session.selectedBallStyle.spinsInFlight {
+            ball.zRotation = CGFloat.random(in: 0..<(2 * .pi))
+            let spinDirection: CGFloat = Bool.random() ? 1 : -1
+            ball.physicsBody?.angularVelocity = spinDirection * CGFloat.random(in: 2.4...6.2)
+        }
         addChild(ball)
     }
 

@@ -43,6 +43,12 @@ final class BrickRainTests: XCTestCase {
         XCTAssertEqual(BallStyle.allCases.count, 10)
     }
 
+    func testPolygonBallsSpinInFlight() {
+        let spinning = Set(BallStyle.allCases.filter(\.spinsInFlight))
+        XCTAssertEqual(spinning, Set([.triangle, .hexagon, .pixel, .star]))
+        XCTAssertFalse(BallStyle.mini.spinsInFlight)
+    }
+
     func testSavedObjectsSnapBackToWholeRows() {
         let cellSize: CGFloat = 390 / 7
         let spawnY: CGFloat = 700 - 12 - cellSize * 1.5

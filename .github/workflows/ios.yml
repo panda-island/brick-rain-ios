@@ -52,18 +52,18 @@ jobs:
           test -f "$APP_PATH/laser.wav"
           test -f "$APP_PATH/pickup.wav"
           test -f "$APP_PATH/spring.wav"
-          printf '{"version":"1.13.2","build":"17","commit":"%s","features":"raised-loss-line,paid-revive,alpha-transparent-lasers,ten-ball-styles,coin-hud"}\n' "$GITHUB_SHA" > "$APP_PATH/BuildIdentity.json"
+          printf '{"version":"1.14.0","build":"18","commit":"%s","features":"laser-visible-mini-ball,random-polygon-spin,paid-revive,ten-ball-styles,coin-hud"}\n' "$GITHUB_SHA" > "$APP_PATH/BuildIdentity.json"
 
       - name: Package unsigned IPA
         run: |
           mkdir -p build/Payload
           cp -R build/DerivedData/Build/Products/Release-iphoneos/BrickRain.app build/Payload/
           cd build
-          zip -qry BrickRain-1.13.2-17-unsigned.ipa Payload
+          zip -qry BrickRain-1.14.0-18-unsigned.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: BrickRain-1.13.2-17-unsigned-ipa
-          path: build/BrickRain-1.13.2-17-unsigned.ipa
+          name: BrickRain-1.14.0-18-unsigned-ipa
+          path: build/BrickRain-1.14.0-18-unsigned.ipa
           if-no-files-found: error
