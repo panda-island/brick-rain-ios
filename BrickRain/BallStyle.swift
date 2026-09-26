@@ -7,6 +7,10 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
     case comet
     case hexagon
     case pixel
+    case giant
+    case phantom
+    case rainbow
+    case star
 
     var id: String { rawValue }
 
@@ -18,6 +22,10 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
         case .comet: return "彗星火球"
         case .hexagon: return "薄荷六角球"
         case .pixel: return "像素方球"
+        case .giant: return "泰坦大球"
+        case .phantom: return "幽影球"
+        case .rainbow: return "彩虹脈衝球"
+        case .star: return "星芒球"
         }
     }
 
@@ -29,6 +37,10 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
         case .comet: return "拖著橘紅尾焰，撞擊時爆出火花"
         case .hexagon: return "大型六角外框，撞擊時展開能量環"
         case .pixel: return "小型方形球，撞擊時散出像素碎片"
+        case .giant: return "目前最大的球，撞擊時產生重型震波"
+        case .phantom: return "半透明球體，撞擊時留下雙層幽影"
+        case .rainbow: return "拖出變色光跡，撞擊時綻放彩色火花"
+        case .star: return "星形外觀，撞擊時放射五道星芒"
         }
     }
 
@@ -40,6 +52,10 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
         case .comet: return 5.1
         case .hexagon: return 6.4
         case .pixel: return 4.6
+        case .giant: return 8.4
+        case .phantom: return 5.3
+        case .rainbow: return 5.7
+        case .star: return 6.1
         }
     }
 }

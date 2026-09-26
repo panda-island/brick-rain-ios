@@ -44,6 +44,7 @@ struct ContentView: View {
                 round: session.round,
                 hitCount: session.hitCount,
                 bestRound: session.bestRound,
+                coins: session.coins,
                 soundEnabled: session.soundEnabled,
                 hapticsEnabled: session.hapticsEnabled,
                 canGoHome: session.phase != .firing && session.phase != .aiming,
@@ -55,18 +56,25 @@ struct ContentView: View {
         }
         .overlay {
             if session.phase == .gameOver {
-                GameOverCard(
-                    round: session.round,
-                    onHome: { screen = .home },
-                    onContinue: { recoveryRequest += 1 },
-                    onRestart: {
-                        ProgressStore.clear()
-                        let selected = session.selectedBallStyle
-                        session = GameSession()
-                        session.selectBall(selected)
-                        sceneID = UUID()
-                    }
-                )
+                ZStack {
+                    Color.black.opacity(0.62)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { }
+                    GameOverCard(
+                        round: session.round,
+                        onHome: { screen = .home },
+                        onContinue: { recoveryRequest += 1 },
+                        onRestart: {
+                            ProgressStore.clear()
+                            let selected = session.selectedBallStyle
+                            session = GameSession()
+                            session.selectBall(selected)
+                            sceneID = UUID()
+                        }
+                    )
+                }
+                .transition(.opacity)
             }
         }
     }
@@ -221,6 +229,9 @@ private struct BallPreview: View {
                 RoundedRectangle(cornerRadius: size * 0.08).fill(ballColor(style))
                     .overlay(RoundedRectangle(cornerRadius: size * 0.08).stroke(.white.opacity(0.9), lineWidth: max(1, size * 0.05)))
                     .overlay(Image(systemName: "circle.grid.cross.fill").resizable().scaledToFit().padding(size * 0.26).foregroundStyle(.white.opacity(0.8)))
+            } else if style == .star {
+                Image(systemName: "star.fill").resizable().scaledToFit().foregroundStyle(ballColor(style))
+                    .overlay(Image(systemName: "sparkle").resizable().scaledToFit().padding(size * 0.3).foregroundStyle(.white))
             } else {
                 Circle().fill(ballColor(style))
                     .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: max(1, size * 0.045)))
@@ -229,14 +240,21 @@ private struct BallPreview: View {
                             Circle().fill(.white).frame(width: size * 0.28)
                         } else if style == .comet {
                             Image(systemName: "flame.fill").resizable().scaledToFit().padding(size * 0.24).foregroundStyle(.yellow)
+                        } else if style == .giant {
+                            Circle().stroke(.white.opacity(0.9), lineWidth: max(2, size * 0.08)).padding(size * 0.2)
+                        } else if style == .phantom {
+                            Image(systemName: "moon.haze.fill").resizable().scaledToFit().padding(size * 0.22).foregroundStyle(.white.opacity(0.85))
+                        } else if style == .rainbow {
+                            AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .pink, .red], center: .center)
+                                .clipShape(Circle()).padding(size * 0.2)
                         } else {
                             Circle().stroke(.cyan.opacity(0.9), lineWidth: max(1, size * 0.07)).padding(size * 0.24)
                         }
                     }
             }
         }
-        .frame(width: style == .mini ? size * 0.52 : style == .pixel ? size * 0.8 : size,
-               height: style == .mini ? size * 0.52 : style == .pixel ? size * 0.8 : size)
+        .frame(width: style == .mini ? size * 0.52 : style == .pixel ? size * 0.8 : style == .giant ? size * 1.12 : size,
+               height: style == .mini ? size * 0.52 : style == .pixel ? size * 0.8 : style == .giant ? size * 1.12 : size)
     }
 }
 
@@ -248,6 +266,10 @@ private func ballColor(_ style: BallStyle) -> Color {
     case .comet: return .orange
     case .hexagon: return .mint
     case .pixel: return .green
+    case .giant: return Color(red: 0.18, green: 0.42, blue: 1)
+    case .phantom: return .purple.opacity(0.72)
+    case .rainbow: return .cyan
+    case .star: return .yellow
     }
 }
 
@@ -255,6 +277,7 @@ private struct ScoreHeader: View {
     let round: Int
     let hitCount: Int
     let bestRound: Int
+    let coins: Int
     let soundEnabled: Bool
     let hapticsEnabled: Bool
     let canGoHome: Bool
@@ -263,12 +286,17 @@ private struct ScoreHeader: View {
     let onToggleHaptics: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 9) {
             Button(action: onHome) { Image(systemName: "house.fill").frame(width: 30, height: 34) }
                 .buttonStyle(.plain).disabled(!canGoHome).opacity(canGoHome ? 1 : 0.3)
             StatBlock(title: "ROUND", value: round, prominent: true)
             StatBlock(title: "HITS", value: hitCount)
             Spacer(minLength: 2)
+            HStack(spacing: 3) {
+                Image(systemName: "circle.hexagongrid.fill").foregroundStyle(.yellow)
+                Text("\(coins)").font(.caption.weight(.black).monospacedDigit())
+            }
+            .accessibilityLabel("Coins \(coins)")
             StatBlock(title: "BEST", value: bestRound)
             Button(action: onToggleSound) {
                 Image(systemName: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill").frame(width: 30, height: 34)

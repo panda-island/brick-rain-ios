@@ -60,7 +60,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             addRow()
             saveProgress()
         }
-        publish(.ready)
+        publish(hasBrickTouchingFloor() ? .gameOver : .ready)
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -79,6 +79,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         brickValues.removeAll()
         configureBoard()
         restore(progress)
+        if hasBrickTouchingFloor() { publish(.gameOver) }
     }
 
     private var floorY: CGFloat { max(28, size.height * 0.045) }
@@ -129,20 +130,22 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard !isFiring, !isTransitioning, let point = touches.first?.location(in: self), point.y > launchOrigin.y + 35 else { return }
+        guard session.phase != .gameOver, !isFiring, !isTransitioning,
+              let point = touches.first?.location(in: self), point.y > launchOrigin.y + 35 else { return }
         aimPoint = point
         publish(.aiming)
         drawAimGuide(to: point)
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard !isFiring, !isTransitioning, let point = touches.first?.location(in: self), point.y > launchOrigin.y + 20 else { return }
+        guard session.phase != .gameOver, !isFiring, !isTransitioning,
+              let point = touches.first?.location(in: self), point.y > launchOrigin.y + 20 else { return }
         aimPoint = point
         drawAimGuide(to: point)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard !isFiring, !isTransitioning, let target = aimPoint else { return }
+        guard session.phase != .gameOver, !isFiring, !isTransitioning, let target = aimPoint else { return }
         childNode(withName: "aimGuide")?.removeFromParent()
         aimPoint = nil
         fire(toward: target)
@@ -246,7 +249,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.zPosition = 5
         ball.physicsBody?.isDynamic = true
         ball.physicsBody?.affectedByGravity = false
-        ball.physicsBody?.allowsRotation = [.triangle, .hexagon, .pixel].contains(session.selectedBallStyle)
+        ball.physicsBody?.allowsRotation = [.triangle, .hexagon, .pixel, .star].contains(session.selectedBallStyle)
         ball.physicsBody?.friction = 0
         ball.physicsBody?.linearDamping = 0
         ball.physicsBody?.restitution = 1
@@ -258,6 +261,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.userData?["lastDX"] = direction.dx
         ball.userData?["lastDY"] = direction.dy
         if session.selectedBallStyle == .triangle { ball.physicsBody?.angularVelocity = 3.8 }
+        if session.selectedBallStyle == .star { ball.physicsBody?.angularVelocity = 2.8 }
         addChild(ball)
     }
 
@@ -341,6 +345,56 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             core.strokeColor = .clear
             ball.addChild(core)
             ball.userData = NSMutableDictionary(object: UIColor.systemGreen, forKey: "trailColor" as NSString)
+        case .giant:
+            ball = SKShapeNode(circleOfRadius: ballRadius)
+            ball.fillColor = UIColor(red: 0.12, green: 0.32, blue: 0.95, alpha: 1)
+            ball.strokeColor = .white
+            ball.lineWidth = 1.5
+            ball.glowWidth = 4
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
+            let ring = SKShapeNode(circleOfRadius: ballRadius * 0.55)
+            ring.fillColor = .clear
+            ring.strokeColor = UIColor.white.withAlphaComponent(0.9)
+            ring.lineWidth = 1.2
+            ball.addChild(ring)
+            ball.userData = NSMutableDictionary(object: UIColor.systemBlue, forKey: "trailColor" as NSString)
+        case .phantom:
+            ball = SKShapeNode(circleOfRadius: ballRadius)
+            ball.fillColor = UIColor.systemPurple.withAlphaComponent(0.55)
+            ball.strokeColor = UIColor.white.withAlphaComponent(0.85)
+            ball.lineWidth = 1
+            ball.glowWidth = 5
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
+            let eye = SKShapeNode(circleOfRadius: ballRadius * 0.25)
+            eye.fillColor = .white
+            eye.strokeColor = .clear
+            ball.addChild(eye)
+            ball.userData = NSMutableDictionary(object: UIColor.systemPurple, forKey: "trailColor" as NSString)
+        case .rainbow:
+            ball = SKShapeNode(circleOfRadius: ballRadius)
+            ball.fillColor = .cyan
+            ball.strokeColor = .white
+            ball.lineWidth = 1.2
+            ball.glowWidth = 3
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
+            for (index, color) in [UIColor.systemRed, .systemYellow, .systemGreen, .systemBlue].enumerated() {
+                let dot = SKShapeNode(circleOfRadius: ballRadius * 0.18)
+                let angle = CGFloat(index) * .pi / 2
+                dot.position = CGPoint(x: cos(angle) * ballRadius * 0.42, y: sin(angle) * ballRadius * 0.42)
+                dot.fillColor = color
+                dot.strokeColor = .clear
+                ball.addChild(dot)
+            }
+            ball.userData = NSMutableDictionary(object: UIColor.cyan, forKey: "trailColor" as NSString)
+        case .star:
+            let path = starPath(points: 5, outerRadius: ballRadius, innerRadius: ballRadius * 0.46)
+            ball = SKShapeNode(path: path)
+            ball.fillColor = .systemYellow
+            ball.strokeColor = .white
+            ball.lineWidth = 1
+            ball.glowWidth = 4
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius * 0.78)
+            ball.userData = NSMutableDictionary(object: UIColor.systemYellow, forKey: "trailColor" as NSString)
         }
         return ball
     }
@@ -349,6 +403,18 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let path = CGMutablePath()
         for index in 0..<sides {
             let angle = rotation + CGFloat(index) * 2 * .pi / CGFloat(sides)
+            let point = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
+            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    private func starPath(points: Int, outerRadius: CGFloat, innerRadius: CGFloat) -> CGPath {
+        let path = CGMutablePath()
+        for index in 0..<(points * 2) {
+            let radius = index.isMultiple(of: 2) ? outerRadius : innerRadius
+            let angle = -.pi / 2 + CGFloat(index) * .pi / CGFloat(points)
             let point = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
             if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
         }
@@ -519,18 +585,24 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func addTrail(at position: CGPoint, color: UIColor) {
         let trail: SKShapeNode
-        if session.selectedBallStyle == .triangle {
+        if session.selectedBallStyle == .triangle || session.selectedBallStyle == .star {
             let path = CGMutablePath()
             path.move(to: CGPoint(x: 0, y: 3))
             path.addLine(to: CGPoint(x: -2.6, y: -2))
             path.addLine(to: CGPoint(x: 2.6, y: -2))
             path.closeSubpath()
             trail = SKShapeNode(path: path)
+        } else if session.selectedBallStyle == .pixel {
+            trail = SKShapeNode(rectOf: CGSize(width: 3.8, height: 3.8))
         } else {
-            trail = SKShapeNode(circleOfRadius: session.selectedBallStyle == .mini ? 1.25 : 2.3)
+            let radius: CGFloat = session.selectedBallStyle == .mini ? 1.25 : session.selectedBallStyle == .giant ? 3.4 : 2.3
+            trail = SKShapeNode(circleOfRadius: radius)
         }
         trail.position = position
-        trail.fillColor = color.withAlphaComponent(0.72)
+        let trailColor = session.selectedBallStyle == .rainbow
+            ? UIColor(hue: CGFloat.random(in: 0...1), saturation: 0.9, brightness: 1, alpha: 0.8)
+            : color.withAlphaComponent(session.selectedBallStyle == .phantom ? 0.38 : 0.72)
+        trail.fillColor = trailColor
         trail.strokeColor = .clear
         trail.zPosition = 3
         trail.run(.sequence([
@@ -562,6 +634,23 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .pixel:
             color = .systemGreen
             count = 4
+        case .giant:
+            color = .systemBlue
+            count = 12
+            addImpactRing(at: position, color: color, radius: 9, scale: 4.2)
+            shake(intensity: 2.2)
+        case .phantom:
+            color = .systemPurple
+            count = 2
+            addImpactRing(at: position, color: color.withAlphaComponent(0.7), radius: 7, scale: 3.2)
+            addImpactRing(at: position, color: .white.withAlphaComponent(0.55), radius: 4, scale: 4.4)
+        case .rainbow:
+            color = UIColor(hue: CGFloat.random(in: 0...1), saturation: 0.9, brightness: 1, alpha: 1)
+            count = 10
+        case .star:
+            color = .systemYellow
+            count = 5
+            addImpactRing(at: position, color: .white, radius: 5, scale: 2.8)
         }
 
         for index in 0..<count {
@@ -589,6 +678,21 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             ]))
             addChild(spark)
         }
+    }
+
+    private func addImpactRing(at position: CGPoint, color: UIColor, radius: CGFloat, scale: CGFloat) {
+        let ring = SKShapeNode(circleOfRadius: radius)
+        ring.position = position
+        ring.strokeColor = color
+        ring.fillColor = .clear
+        ring.lineWidth = 2
+        ring.glowWidth = 4
+        ring.zPosition = 23
+        ring.run(.sequence([
+            .group([.scale(to: scale, duration: 0.18), .fadeOut(withDuration: 0.18)]),
+            .removeFromParent()
+        ]))
+        addChild(ring)
     }
 
     private func showCoinCollected(at position: CGPoint) {
@@ -723,7 +827,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             guard self.brickValues[ObjectIdentifier(node)] != nil else { return }
             let destinationY = node.position.y - self.cellSize
             node.run(.moveTo(y: destinationY, duration: 0.24))
-            if destinationY - self.cellSize * 0.445 <= self.floorY + 8 {
+            if self.brickTouchesFloor(centerY: destinationY) {
                 reachedBottom = true
             }
         }
@@ -757,6 +861,20 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             addRow(extraBallCount: extraBallCount)
             saveProgress()
             publish(.ready)
+        }
+    }
+
+    static func brickTouchesFloor(centerY: CGFloat, cellSize: CGFloat, floorY: CGFloat) -> Bool {
+        centerY - cellSize * 0.445 <= floorY + 0.5
+    }
+
+    private func brickTouchesFloor(centerY: CGFloat) -> Bool {
+        Self.brickTouchesFloor(centerY: centerY, cellSize: cellSize, floorY: floorY)
+    }
+
+    private func hasBrickTouchingFloor() -> Bool {
+        children.contains { node in
+            node.name == "brick" && brickValues[ObjectIdentifier(node)] != nil && brickTouchesFloor(centerY: node.position.y)
         }
     }
 

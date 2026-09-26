@@ -40,7 +40,7 @@ final class BrickRainTests: XCTestCase {
 
     func testEveryDrawStyleHasAUniqueIdentifier() {
         XCTAssertEqual(Set(BallStyle.allCases.map(\.rawValue)).count, BallStyle.allCases.count)
-        XCTAssertEqual(BallStyle.allCases.count, 6)
+        XCTAssertEqual(BallStyle.allCases.count, 10)
     }
 
     func testSavedObjectsSnapBackToWholeRows() {
@@ -48,5 +48,13 @@ final class BrickRainTests: XCTestCase {
         let spawnY: CGFloat = 700 - 12 - cellSize * 1.5
         XCTAssertEqual(GameScene.snappedRow(positionY: spawnY - cellSize * 3.42, spawnY: spawnY, cellSize: cellSize), 3)
         XCTAssertEqual(GameScene.snappedRow(positionY: spawnY - cellSize * 3.58, spawnY: spawnY, cellSize: cellSize), 4)
+    }
+
+    func testBrickLosesAsSoonAsItsEdgeTouchesTheFloor() {
+        let cellSize: CGFloat = 56
+        let floorY: CGFloat = 30
+        let touchingCenter = floorY + cellSize * 0.445
+        XCTAssertTrue(GameScene.brickTouchesFloor(centerY: touchingCenter, cellSize: cellSize, floorY: floorY))
+        XCTAssertFalse(GameScene.brickTouchesFloor(centerY: touchingCenter + 1, cellSize: cellSize, floorY: floorY))
     }
 }
