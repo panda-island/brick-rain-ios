@@ -73,6 +73,22 @@ final class BrickRainTests: XCTestCase {
         XCTAssertLessThan(topRight.velocity.dy, 0)
     }
 
+    func testHighRoundVolleyLaunchesWithinAReasonableWindow() {
+        let normal = GameScene.adaptiveLaunchInterval(totalBallCount: 1_000, isFastForwarding: false)
+        let fast = GameScene.adaptiveLaunchInterval(totalBallCount: 1_000, isFastForwarding: true)
+        XCTAssertLessThanOrEqual(normal * 1_000, 22.01)
+        XCTAssertEqual(fast, normal / 2, accuracy: 0.000_001)
+        XCTAssertEqual(GameScene.adaptiveLaunchInterval(totalBallCount: 10, isFastForwarding: false), 0.075)
+    }
+
+    func testFourDigitBrickValuesFitInsideTheBrick() {
+        let threeDigits = GameScene.brickLabelFontSize(value: 999, cellSize: 56)
+        let fourDigits = GameScene.brickLabelFontSize(value: 1_000, cellSize: 56)
+        let fiveDigits = GameScene.brickLabelFontSize(value: 10_000, cellSize: 56)
+        XCTAssertLessThan(fourDigits, threeDigits)
+        XCTAssertLessThan(fiveDigits, fourDigits)
+    }
+
     func testSavedObjectsSnapBackToWholeRows() {
         let cellSize: CGFloat = 390 / 7
         let spawnY: CGFloat = 700 - 12 - cellSize * 1.5

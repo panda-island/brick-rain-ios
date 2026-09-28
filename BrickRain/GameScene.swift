@@ -15,6 +15,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private let ballSpeed: CGFloat = 520
     private let launchInterval = 0.075
     private let fastForwardMultiplier: CGFloat = 2
+    private let maximumSimultaneousBalls = 180
     private var cellSize: CGFloat = 0
     private var roundNumber = 1
     private var totalBalls = 1
@@ -239,18 +240,36 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             launchTimer = nil
             return
         }
-        let interval = launchInterval / (session.isFastForwarding ? Double(fastForwardMultiplier) : 1)
+        let interval = Self.adaptiveLaunchInterval(
+            totalBallCount: totalBalls,
+            baseInterval: launchInterval,
+            isFastForwarding: session.isFastForwarding
+        )
         launchTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
             Task { @MainActor in
                 guard let self else { timer.invalidate(); return }
                 if self.ballsToLaunch > 0 {
-                    self.launchOne(direction: self.launchDirection)
+                    if self.activeBalls < self.maximumSimultaneousBalls {
+                        self.launchOne(direction: self.launchDirection)
+                    }
                 } else {
                     timer.invalidate()
                     self.launchTimer = nil
                 }
             }
         }
+    }
+
+    static func adaptiveLaunchInterval(
+        totalBallCount: Int,
+        baseInterval: TimeInterval = 0.075,
+        isFastForwarding: Bool
+    ) -> TimeInterval {
+        // A fixed delay makes a 1,000-ball volley spend 75 seconds just launching.
+        // Keep the launch window bounded while the active-ball cap protects physics.
+        let boundedWindowInterval = 22 / Double(max(1, totalBallCount))
+        let interval = max(0.018, min(baseInterval, boundedWindowInterval))
+        return interval / (isFastForwarding ? 2 : 1)
     }
 
     private func launchOne(direction: CGVector) {
@@ -450,9 +469,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard isFiring else { return }
         let shouldAddTrail = currentTime - lastTrailTime >= 0.055
         if shouldAddTrail { lastTrailTime = currentTime }
+        let trailStride = max(1, activeBalls / 28)
+        var ballIndex = 0
         enumerateChildNodes(withName: "ball") { [weak self] node, _ in
             guard let self else { return }
-            if shouldAddTrail { self.addTrail(at: node.position, color: node.userData?["trailColor"] as? UIColor ?? .white) }
+            if shouldAddTrail, ballIndex.isMultiple(of: trailStride) {
+                self.addTrail(at: node.position, color: node.userData?["trailColor"] as? UIColor ?? .white)
+            }
+            ballIndex += 1
             let escapedBoard = !node.position.x.isFinite
                 || !node.position.y.isFinite
                 || node.position.y < self.floorY - self.cellSize
@@ -535,6 +559,21 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ballSpeed * (session.isFastForwarding ? fastForwardMultiplier : 1)
     }
 
+    private var isHighLoadVolley: Bool {
+        totalBalls >= 300 || activeBalls >= 100
+    }
+
+    private func allowsVisualEffect(
+        _ key: String,
+        normalInterval: TimeInterval = 0,
+        highLoadInterval: TimeInterval
+    ) -> Bool {
+        let interval = isHighLoadVolley ? highLoadInterval : normalInterval
+        guard sceneTime - (lastEffectTimes[key] ?? -.infinity) >= interval else { return false }
+        lastEffectTimes[key] = sceneTime
+        return true
+    }
+
     private func land(ball: SKNode, recordsLandingPosition: Bool = true) {
         guard ball.parent != nil else { return }
         if recordsLandingPosition, firstLandingX == nil {
@@ -589,7 +628,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let nodes = [contact.bodyA.node, contact.bodyB.node].compactMap { $0 }
         guard let ball = nodes.first(where: { $0.name == "ball" }) else { return }
         if let brick = nodes.first(where: { $0.name == "brick" }) {
-            showBallImpact(at: contact.contactPoint)
+            if allowsVisualEffect("ballImpact", normalInterval: 0.008, highLoadInterval: 0.045) {
+                showBallImpact(at: contact.contactPoint)
+            }
             hit(brick: brick)
         } else if let pickup = nodes.first(where: { $0.name == "pickup" }) {
             collect(pickup: pickup, ball: ball)
@@ -605,7 +646,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             lastPopTime = sceneTime
             run(.playSoundFileNamed("pop.wav", waitForCompletion: false))
         }
-        emitBrickParticles(at: brick.position, color: (brick as? SKShapeNode)?.fillColor ?? .white, count: value <= 1 ? 9 : 4)
+        if allowsVisualEffect("brickParticles", normalInterval: 0.006, highLoadInterval: 0.04) {
+            let particleCount = isHighLoadVolley ? (value <= 1 ? 3 : 1) : (value <= 1 ? 9 : 4)
+            emitBrickParticles(at: brick.position, color: (brick as? SKShapeNode)?.fillColor ?? .white, count: particleCount)
+        }
         if value <= 1 {
             brickValues[key] = nil
             comboCount += 1
@@ -623,7 +667,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         } else {
             brickValues[key] = value - 1
             updateBrick(brick, value: value - 1)
-            if let label = brick.childNode(withName: "value") {
+            if !isHighLoadVolley, let label = brick.childNode(withName: "value") {
                 label.removeAction(forKey: "numberPulse")
                 label.run(.sequence([.scale(to: 1.35, duration: 0.035), .scale(to: 1, duration: 0.08)]), withKey: "numberPulse")
             }
@@ -654,8 +698,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .laserVertical, .laserHorizontal, .laserCross:
             markActivated(pickup)
             playEffect("laser.wav")
-            if session.hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
-            shake(intensity: 4)
+            if allowsVisualEffect("laserFeedback", normalInterval: 0.055, highLoadInterval: 0.14) {
+                if session.hapticsEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+                shake(intensity: 4)
+            }
             fireLaser(kind, from: pickup.position)
         case .coin:
             pickup.removeFromParent()
@@ -666,12 +712,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .brick, .triangleBrick:
             break
         }
-        let pulse = SKShapeNode(circleOfRadius: 13)
-        pulse.position = ball.position
-        pulse.strokeColor = color(for: kind)
-        pulse.lineWidth = 2
-        pulse.run(.sequence([.group([.scale(to: 2.2, duration: 0.2), .fadeOut(withDuration: 0.2)]), .removeFromParent()]))
-        addChild(pulse)
+        if allowsVisualEffect("pickupPulse", normalInterval: 0.012, highLoadInterval: 0.06) {
+            let pulse = SKShapeNode(circleOfRadius: 13)
+            pulse.position = ball.position
+            pulse.strokeColor = color(for: kind)
+            pulse.lineWidth = 2
+            pulse.run(.sequence([.group([.scale(to: 2.2, duration: 0.2), .fadeOut(withDuration: 0.2)]), .removeFromParent()]))
+            addChild(pulse)
+        }
     }
 
     private func markActivated(_ pickup: SKNode) {
@@ -1140,7 +1188,18 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         shape.fillColor = color
         shape.strokeColor = color.withAlphaComponent(0.4)
         label.text = "\(value)"
+        label.fontSize = Self.brickLabelFontSize(value: value, cellSize: cellSize)
         label.fontColor = .white
+    }
+
+    static func brickLabelFontSize(value: Int, cellSize: CGFloat) -> CGFloat {
+        let base = min(22, cellSize * 0.34)
+        switch String(max(0, value)).count {
+        case 0...3: return base
+        case 4: return base * 0.78
+        case 5: return base * 0.64
+        default: return base * 0.52
+        }
     }
 
     private func randomBonusPowerUp() -> GameProgress.BoardObject.Kind {
@@ -1250,11 +1309,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             hit(brick: target)
         }
 
-        if vertical {
-            addLaserBeam(from: CGPoint(x: origin.x, y: floorY), to: CGPoint(x: origin.x, y: topY), color: color(for: kind))
-        }
-        if horizontal {
-            addLaserBeam(from: CGPoint(x: 0, y: origin.y), to: CGPoint(x: size.width, y: origin.y), color: color(for: kind))
+        if allowsVisualEffect("laserBeam.\(kind.rawValue)", normalInterval: 0.025, highLoadInterval: 0.075) {
+            if vertical {
+                addLaserBeam(from: CGPoint(x: origin.x, y: floorY), to: CGPoint(x: origin.x, y: topY), color: color(for: kind))
+            }
+            if horizontal {
+                addLaserBeam(from: CGPoint(x: 0, y: origin.y), to: CGPoint(x: size.width, y: origin.y), color: color(for: kind))
+            }
         }
     }
 
