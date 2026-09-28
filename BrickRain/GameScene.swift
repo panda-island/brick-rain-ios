@@ -1497,7 +1497,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func showHitEveryBrickBonus() {
         let label = SKLabelNode(fontNamed: "AvenirNext-Heavy")
-        label.text = "ALL BRICKS HIT  + ITEM"
+        label.text = "ALL BRICKS HIT + ITEM"
         label.fontSize = 20
         label.fontColor = .systemGreen
         label.position = CGPoint(x: size.width / 2, y: size.height * 0.54)

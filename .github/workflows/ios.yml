@@ -49,7 +49,7 @@ jobs:
           strings "$EXECUTABLE" | grep -F "brickRain.coins.v1"
           strings "$EXECUTABLE" | grep -F "particleEffectLevel"
           strings "$EXECUTABLE" | grep -F "Open game settings"
-          strings "$EXECUTABLE" | grep -F "ALL BRICKS HIT  + ITEM"
+          strings "$EXECUTABLE" | grep -F "ALL BRICKS HIT + ITEM"
           strings "$EXECUTABLE" | grep -F "particleColorSequence"
           strings "$EXECUTABLE" | grep -F "shuriken"
           strings "$EXECUTABLE" | grep -F "CLEAR BOTTOM 3 ROWS & CONTINUE"
