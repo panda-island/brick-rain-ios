@@ -1,6 +1,22 @@
 import Foundation
 import Observation
 
+enum ParticleEffectLevel: Int, CaseIterable, Identifiable {
+    case low
+    case standard
+    case high
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .low: return "低"
+        case .standard: return "標準"
+        case .high: return "高"
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class GameSession {
@@ -16,9 +32,14 @@ final class GameSession {
     var hitCount = 0
     var bestRound = UserDefaults.standard.integer(forKey: "bestRound")
     var phase: Phase = .ready
-    var soundEnabled = true
+    var soundEnabled = UserDefaults.standard.object(forKey: "soundEnabled") as? Bool ?? true
     var hapticsEnabled = UserDefaults.standard.object(forKey: "hapticsEnabled") as? Bool ?? true
     var highRefreshRateEnabled = UserDefaults.standard.bool(forKey: "highRefreshRateEnabled")
+    var particleEffectLevel: ParticleEffectLevel = {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: "particleEffectLevel") != nil else { return .standard }
+        return ParticleEffectLevel(rawValue: defaults.integer(forKey: "particleEffectLevel")) ?? .standard
+    }()
     var canRecall = false
     var canFastForward = false
     var isFastForwarding = false
@@ -32,9 +53,24 @@ final class GameSession {
         UserDefaults.standard.set(hapticsEnabled, forKey: "hapticsEnabled")
     }
 
+    func setSoundEnabled(_ enabled: Bool) {
+        soundEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "soundEnabled")
+    }
+
+    func setHapticsEnabled(_ enabled: Bool) {
+        hapticsEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "hapticsEnabled")
+    }
+
     func setHighRefreshRateEnabled(_ enabled: Bool) {
         highRefreshRateEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: "highRefreshRateEnabled")
+    }
+
+    func setParticleEffectLevel(_ level: ParticleEffectLevel) {
+        particleEffectLevel = level
+        UserDefaults.standard.set(level.rawValue, forKey: "particleEffectLevel")
     }
 
     func collectCoin() {

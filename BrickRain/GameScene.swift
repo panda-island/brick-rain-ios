@@ -328,22 +328,17 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         case .classic:
             ball = SKShapeNode(circleOfRadius: ballRadius)
             ball.fillColor = .white
-            ball.strokeColor = .cyan
-            ball.lineWidth = 1.2
+            ball.strokeColor = .clear
+            ball.lineWidth = 0
             ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
-            let core = SKShapeNode(circleOfRadius: ballRadius * 0.34)
-            core.fillColor = .cyan
-            core.strokeColor = .clear
-            ball.addChild(core)
-            ball.userData = NSMutableDictionary(object: UIColor.cyan, forKey: "trailColor" as NSString)
+            ball.userData = NSMutableDictionary()
         case .mini:
             ball = SKShapeNode(circleOfRadius: ballRadius)
-            ball.fillColor = .systemYellow
-            ball.strokeColor = .white
-            ball.lineWidth = 0.8
-            ball.glowWidth = 2
+            ball.fillColor = .white
+            ball.strokeColor = .clear
+            ball.lineWidth = 0
             ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
-            ball.userData = NSMutableDictionary(object: UIColor.systemYellow, forKey: "trailColor" as NSString)
+            ball.userData = NSMutableDictionary()
         case .triangle:
             let path = CGMutablePath()
             path.move(to: CGPoint(x: 0, y: ballRadius))
@@ -537,7 +532,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         var ballIndex = 0
         enumerateChildNodes(withName: "ball") { [weak self] node, _ in
             guard let self else { return }
-            if shouldAddTrail, ballIndex.isMultiple(of: trailStride) {
+            if shouldAddTrail,
+               session.selectedBallStyle != .classic,
+               session.selectedBallStyle != .mini,
+               ballIndex.isMultiple(of: trailStride) {
                 self.addTrail(at: node.position, color: node.userData?["trailColor"] as? UIColor ?? .white)
             }
             ballIndex += 1
@@ -706,7 +704,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let nodes = [contact.bodyA.node, contact.bodyB.node].compactMap { $0 }
         guard let ball = nodes.first(where: { $0.name == "ball" }) else { return }
         if let brick = nodes.first(where: { $0.name == "brick" }) {
-            if allowsVisualEffect("ballImpact", normalInterval: 0.008, highLoadInterval: 0.045) {
+            if session.selectedBallStyle != .classic,
+               session.selectedBallStyle != .mini,
+               allowsVisualEffect("ballImpact", normalInterval: 0.008, highLoadInterval: 0.045) {
                 showBallImpact(at: contact.contactPoint)
             }
             hit(brick: brick)
@@ -727,10 +727,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let brickColor = (brick as? SKShapeNode)?.fillColor ?? .white
         if value <= 1 {
             if allowsVisualEffect("brickBreakParticles", normalInterval: 0.012, highLoadInterval: 0.055) {
-                emitBrickBreakParticles(at: brick.position, color: brickColor, count: isHighLoadVolley ? 20 : 34)
+                emitBrickBreakParticles(
+                    at: brick.position,
+                    color: brickColor,
+                    count: brickBreakParticleCount
+                )
             }
         } else if allowsVisualEffect("brickParticles", normalInterval: 0.012, highLoadInterval: 0.05) {
-            emitBrickParticles(at: brick.position, color: brickColor, count: isHighLoadVolley ? 1 : 4)
+            emitBrickParticles(at: brick.position, color: brickColor, count: brickHitParticleCount)
         }
         if value <= 1 {
             brickValues[key] = nil
@@ -903,7 +907,15 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             addImpactRing(at: position, color: .white.withAlphaComponent(0.55), radius: 8, scale: 2.8)
         }
 
-        for index in 0..<count {
+        let effectScale: CGFloat
+        switch session.particleEffectLevel {
+        case .low: effectScale = 0.55
+        case .standard: effectScale = 1
+        case .high: effectScale = 1.45
+        }
+        let adjustedCount = max(1, Int((CGFloat(count) * effectScale).rounded()))
+
+        for index in 0..<adjustedCount {
             let spark: SKShapeNode
             if session.selectedBallStyle == .classic {
                 spark = SKShapeNode(circleOfRadius: 4)
@@ -913,11 +925,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 spark = SKShapeNode(rectOf: CGSize(width: session.selectedBallStyle == .mini ? 2 : 3, height: 9))
                 spark.fillColor = color
                 spark.strokeColor = .clear
-                spark.zRotation = CGFloat(index) * (2 * .pi / CGFloat(count))
+                spark.zRotation = CGFloat(index) * (2 * .pi / CGFloat(adjustedCount))
             }
             spark.position = position
             spark.zPosition = 24
-            let angle = CGFloat(index) * (2 * .pi / CGFloat(count)) + CGFloat.random(in: -0.25...0.25)
+            let angle = CGFloat(index) * (2 * .pi / CGFloat(adjustedCount)) + CGFloat.random(in: -0.25...0.25)
             spark.run(.sequence([
                 .group([
                     .moveBy(x: cos(angle) * 17, y: sin(angle) * 17, duration: 0.12),
@@ -991,21 +1003,37 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.particleColorBlendFactor = 1
         emitter.particleBirthRate = CGFloat(count) / 0.09
         emitter.numParticlesToEmit = count
-        emitter.particleLifetime = 0.78
-        emitter.particleLifetimeRange = 0.2
+        emitter.particleLifetime = 2
+        emitter.particleLifetimeRange = 0.16
         emitter.emissionAngleRange = .pi * 2
-        emitter.particleSpeed = 46
-        emitter.particleSpeedRange = 28
+        emitter.particleSpeed = 28
+        emitter.particleSpeedRange = 18
         emitter.particleAlpha = 0.95
-        emitter.particleAlphaSpeed = -1.05
+        emitter.particleAlphaSpeed = -0.46
         emitter.particleScale = 0.8
         emitter.particleScaleRange = 0.38
-        emitter.particleScaleSpeed = -0.52
+        emitter.particleScaleSpeed = -0.28
         emitter.particleRotationRange = .pi * 2
         emitter.particleRotationSpeed = 3.2
         emitter.particlePositionRange = CGVector(dx: 12, dy: 12)
         addChild(emitter)
-        emitter.run(.sequence([.wait(forDuration: 1.15), .removeFromParent()]))
+        emitter.run(.sequence([.wait(forDuration: 2.45), .removeFromParent()]))
+    }
+
+    private var brickBreakParticleCount: Int {
+        switch session.particleEffectLevel {
+        case .low: return isHighLoadVolley ? 8 : 14
+        case .standard: return isHighLoadVolley ? 20 : 34
+        case .high: return isHighLoadVolley ? 32 : 56
+        }
+    }
+
+    private var brickHitParticleCount: Int {
+        switch session.particleEffectLevel {
+        case .low: return 1
+        case .standard: return isHighLoadVolley ? 1 : 4
+        case .high: return isHighLoadVolley ? 2 : 7
+        }
     }
 
     private func showCombo() {

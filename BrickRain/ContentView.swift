@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var sceneID = UUID()
     @State private var recoveryRequest = 0
     @State private var drawResult: BallDrawResult?
+    @State private var showsGameMenu = false
 
     var body: some View {
         ZStack {
@@ -45,12 +46,8 @@ struct ContentView: View {
                 hitCount: session.hitCount,
                 bestRound: session.bestRound,
                 coins: session.coins,
-                soundEnabled: session.soundEnabled,
-                hapticsEnabled: session.hapticsEnabled,
-                canGoHome: session.phase != .firing && session.phase != .aiming,
-                onHome: { screen = .home },
-                onToggleSound: { session.soundEnabled.toggle() },
-                onToggleHaptics: { session.toggleHaptics() }
+                canOpenMenu: session.phase != .firing && session.phase != .aiming,
+                onMenu: { showsGameMenu = true }
             )
             GameBoardView(session: session, sceneID: sceneID, recoveryRequest: recoveryRequest).id(sceneID)
         }
@@ -79,6 +76,22 @@ struct ContentView: View {
                     )
                 }
                 .transition(.opacity)
+            } else if showsGameMenu {
+                ZStack {
+                    Color.black.opacity(0.62)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { showsGameMenu = false }
+                    GameSettingsCard(
+                        session: session,
+                        onResume: { showsGameMenu = false },
+                        onHome: {
+                            showsGameMenu = false
+                            screen = .home
+                        }
+                    )
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
             }
         }
     }
@@ -264,10 +277,13 @@ private struct BallPreview: View {
                 }
             } else {
                 Circle().fill(ballColor(style))
-                    .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: max(1, size * 0.045)))
+                    .overlay(Circle().stroke(
+                        style == .classic || style == .mini ? .clear : .white.opacity(0.9),
+                        lineWidth: max(1, size * 0.045)
+                    ))
                     .overlay {
-                        if style == .mini {
-                            Circle().fill(.white).frame(width: size * 0.28)
+                        if style == .classic || style == .mini {
+                            EmptyView()
                         } else if style == .comet {
                             Image(systemName: "flame.fill").resizable().scaledToFit().padding(size * 0.24).foregroundStyle(.yellow)
                         } else if style == .giant {
@@ -281,8 +297,6 @@ private struct BallPreview: View {
                             Image(systemName: "sparkles").resizable().scaledToFit().padding(size * 0.22).foregroundStyle(.white)
                         } else if style == .bubble {
                             Circle().stroke(.white.opacity(0.75), lineWidth: max(1, size * 0.045)).padding(size * 0.2)
-                        } else {
-                            Circle().stroke(.cyan.opacity(0.9), lineWidth: max(1, size * 0.07)).padding(size * 0.24)
                         }
                     }
             }
@@ -295,7 +309,7 @@ private struct BallPreview: View {
 private func ballColor(_ style: BallStyle) -> Color {
     switch style {
     case .classic: return .white
-    case .mini: return .yellow
+    case .mini: return .white
     case .triangle: return .pink
     case .comet: return .orange
     case .hexagon: return .mint
@@ -316,17 +330,14 @@ private struct ScoreHeader: View {
     let hitCount: Int
     let bestRound: Int
     let coins: Int
-    let soundEnabled: Bool
-    let hapticsEnabled: Bool
-    let canGoHome: Bool
-    let onHome: () -> Void
-    let onToggleSound: () -> Void
-    let onToggleHaptics: () -> Void
+    let canOpenMenu: Bool
+    let onMenu: () -> Void
 
     var body: some View {
         HStack(spacing: 9) {
-            Button(action: onHome) { Image(systemName: "house.fill").frame(width: 30, height: 34) }
-                .buttonStyle(.plain).disabled(!canGoHome).opacity(canGoHome ? 1 : 0.3)
+            Button(action: onMenu) { Image(systemName: "house.fill").frame(width: 30, height: 34) }
+                .buttonStyle(.plain).disabled(!canOpenMenu).opacity(canOpenMenu ? 1 : 0.3)
+                .accessibilityLabel("Open game settings")
             StatBlock(title: "ROUND", value: round, prominent: true)
             StatBlock(title: "HITS", value: hitCount)
             Spacer(minLength: 2)
@@ -336,14 +347,78 @@ private struct ScoreHeader: View {
             }
             .accessibilityLabel("Coins \(coins)")
             StatBlock(title: "BEST", value: bestRound)
-            Button(action: onToggleSound) {
-                Image(systemName: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill").frame(width: 30, height: 34)
-            }.buttonStyle(.plain)
-            Button(action: onToggleHaptics) {
-                Image(systemName: hapticsEnabled ? "waveform.path" : "waveform.path.badge.minus").frame(width: 30, height: 34)
-            }.buttonStyle(.plain)
         }
         .padding(.horizontal, 12).padding(.vertical, 10).background(.black.opacity(0.22))
+    }
+}
+
+private struct GameSettingsCard: View {
+    let session: GameSession
+    let onResume: () -> Void
+    let onHome: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("遊戲選單").font(.title2.weight(.black))
+                    Text("設定會自動保存").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: onResume) {
+                    Image(systemName: "xmark").font(.headline.weight(.bold)).frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+                .background(.white.opacity(0.08), in: Circle())
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("粒子效果程度", systemImage: "sparkles")
+                    .font(.subheadline.weight(.bold))
+                Picker("粒子效果程度", selection: Binding(
+                    get: { session.particleEffectLevel },
+                    set: { session.setParticleEffectLevel($0) }
+                )) {
+                    ForEach(ParticleEffectLevel.allCases) { level in
+                        Text(level.title).tag(level)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Toggle(isOn: Binding(
+                get: { session.soundEnabled },
+                set: { session.setSoundEnabled($0) }
+            )) {
+                Label("聲音", systemImage: session.soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+            }
+
+            Toggle(isOn: Binding(
+                get: { session.hapticsEnabled },
+                set: { session.setHapticsEnabled($0) }
+            )) {
+                Label("震動", systemImage: "waveform.path")
+            }
+
+            Toggle(isOn: Binding(
+                get: { session.highRefreshRateEnabled },
+                set: { session.setHighRefreshRateEnabled($0) }
+            )) {
+                Label("全介面 120 Hz", systemImage: "speedometer")
+            }
+
+            Button(action: onHome) {
+                Label("回主畫面", systemImage: "house.fill")
+                    .font(.headline.weight(.bold)).frame(maxWidth: .infinity).padding(.vertical, 10)
+            }
+            .buttonStyle(.borderedProminent).tint(.cyan)
+        }
+        .toggleStyle(.switch)
+        .tint(.cyan)
+        .padding(24)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
+        .overlay(RoundedRectangle(cornerRadius: 26).stroke(.white.opacity(0.12)))
+        .padding(28)
     }
 }
 

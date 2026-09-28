@@ -20,8 +20,8 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
 
     var name: String {
         switch self {
-        case .classic: return "經典核心"
-        case .mini: return "迷你穿梭球"
+        case .classic: return "經典白球"
+        case .mini: return "迷你白球"
         case .triangle: return "稜鏡三角球"
         case .comet: return "彗星火球"
         case .hexagon: return "薄荷六角球"
@@ -39,8 +39,8 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
 
     var detail: String {
         switch self {
-        case .classic: return "穩定的標準尺寸與光環打擊"
-        case .mini: return "最小圓球，可穿過相鄰方塊的窄縫"
+        case .classic: return "基本小白球，沒有尾跡與打擊特效"
+        case .mini: return "最小白球，能穿過相鄰方塊的窄縫"
         case .triangle: return "三角外型，撞擊時迸出稜鏡光線"
         case .comet: return "拖著橘紅尾焰，撞擊時爆出火花"
         case .hexagon: return "大型六角外框，撞擊時展開能量環"
@@ -58,7 +58,7 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
 
     var radius: CGFloat {
         switch self {
-        case .classic: return 5.5
+        case .classic: return 4.2
         case .mini: return 2.3
         case .triangle: return 6.2
         case .comet: return 5.1
