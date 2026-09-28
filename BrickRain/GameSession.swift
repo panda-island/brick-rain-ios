@@ -18,6 +18,7 @@ final class GameSession {
     var phase: Phase = .ready
     var soundEnabled = true
     var hapticsEnabled = UserDefaults.standard.object(forKey: "hapticsEnabled") as? Bool ?? true
+    var highRefreshRateEnabled = UserDefaults.standard.bool(forKey: "highRefreshRateEnabled")
     var canRecall = false
     var canFastForward = false
     var isFastForwarding = false
@@ -29,6 +30,11 @@ final class GameSession {
     func toggleHaptics() {
         hapticsEnabled.toggle()
         UserDefaults.standard.set(hapticsEnabled, forKey: "hapticsEnabled")
+    }
+
+    func setHighRefreshRateEnabled(_ enabled: Bool) {
+        highRefreshRateEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "highRefreshRateEnabled")
     }
 
     func collectCoin() {

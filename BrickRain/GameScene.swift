@@ -55,7 +55,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard !didSetUp else { return }
         didSetUp = true
         view.isMultipleTouchEnabled = false
-        view.preferredFramesPerSecond = 60
+        view.preferredFramesPerSecond = session.highRefreshRateEnabled ? 120 : 60
         view.shouldCullNonVisibleNodes = true
         view.ignoresSiblingOrder = true
         configureBoard()
@@ -67,6 +67,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             saveProgress()
         }
         publish(hasBrickTouchingLossLine() ? .gameOver : .ready)
+    }
+
+    func setHighRefreshRateEnabled(_ enabled: Bool) {
+        view?.preferredFramesPerSecond = enabled ? 120 : 60
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -440,6 +444,55 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             ball.glowWidth = 4
             ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius * 0.78)
             ball.userData = NSMutableDictionary(object: UIColor.systemYellow, forKey: "trailColor" as NSString)
+        case .diamond:
+            let path = regularPolygonPath(sides: 4, radius: ballRadius, rotation: 0)
+            ball = SKShapeNode(path: path)
+            ball.fillColor = .systemPink
+            ball.strokeColor = .white
+            ball.lineWidth = 1.1
+            ball.glowWidth = 3
+            ball.physicsBody = SKPhysicsBody(polygonFrom: path)
+            let core = SKShapeNode(path: path)
+            core.setScale(0.42)
+            core.fillColor = .white
+            core.strokeColor = .clear
+            ball.addChild(core)
+            ball.userData = NSMutableDictionary(object: UIColor.systemPink, forKey: "trailColor" as NSString)
+        case .shuriken:
+            let path = starPath(points: 4, outerRadius: ballRadius, innerRadius: ballRadius * 0.28)
+            ball = SKShapeNode(path: path)
+            ball.fillColor = .systemRed
+            ball.strokeColor = .white
+            ball.lineWidth = 1
+            ball.glowWidth = 3
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius * 0.72)
+            ball.userData = NSMutableDictionary(object: UIColor.systemRed, forKey: "trailColor" as NSString)
+        case .nova:
+            ball = SKShapeNode(circleOfRadius: ballRadius)
+            ball.fillColor = .systemIndigo
+            ball.strokeColor = .white
+            ball.lineWidth = 1.3
+            ball.glowWidth = 5
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
+            let core = SKShapeNode(circleOfRadius: ballRadius * 0.34)
+            core.fillColor = .white
+            core.strokeColor = .systemPink
+            core.lineWidth = 1
+            ball.addChild(core)
+            ball.userData = NSMutableDictionary(object: UIColor.systemIndigo, forKey: "trailColor" as NSString)
+        case .bubble:
+            ball = SKShapeNode(circleOfRadius: ballRadius)
+            ball.fillColor = UIColor.systemCyan.withAlphaComponent(0.28)
+            ball.strokeColor = UIColor.white.withAlphaComponent(0.9)
+            ball.lineWidth = 1
+            ball.glowWidth = 2
+            ball.physicsBody = SKPhysicsBody(circleOfRadius: ballRadius)
+            let highlight = SKShapeNode(circleOfRadius: ballRadius * 0.2)
+            highlight.position = CGPoint(x: -ballRadius * 0.35, y: ballRadius * 0.35)
+            highlight.fillColor = UIColor.white.withAlphaComponent(0.9)
+            highlight.strokeColor = .clear
+            ball.addChild(highlight)
+            ball.userData = NSMutableDictionary(object: UIColor.systemCyan, forKey: "trailColor" as NSString)
         }
         return ball
     }
@@ -819,6 +872,23 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             color = .systemYellow
             count = 5
             addImpactRing(at: position, color: .white, radius: 5, scale: 2.8)
+        case .diamond:
+            color = .systemPink
+            count = 7
+            addImpactRing(at: position, color: .white, radius: 4, scale: 3.1)
+        case .shuriken:
+            color = .systemRed
+            count = 8
+        case .nova:
+            color = .systemIndigo
+            count = 10
+            addImpactRing(at: position, color: .systemPink, radius: 6, scale: 4)
+            addImpactRing(at: position, color: .white, radius: 3, scale: 5)
+        case .bubble:
+            color = .systemCyan
+            count = 4
+            addImpactRing(at: position, color: color.withAlphaComponent(0.65), radius: 5, scale: 3.4)
+            addImpactRing(at: position, color: .white.withAlphaComponent(0.55), radius: 8, scale: 2.8)
         }
 
         for index in 0..<count {

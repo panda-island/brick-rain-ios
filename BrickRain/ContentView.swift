@@ -141,6 +141,24 @@ private struct HomeView: View {
                 .buttonStyle(.bordered).disabled(!session.canDrawBall)
 
                 VStack(alignment: .leading, spacing: 10) {
+                    Text("設定").font(.headline.weight(.black))
+                    Toggle(isOn: Binding(
+                        get: { session.highRefreshRateEnabled },
+                        set: { session.setHighRefreshRateEnabled($0) }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("120 Hz 螢幕更新率").font(.subheadline.weight(.bold))
+                            Text("支援 ProMotion 的裝置可顯示更流暢的球體與特效")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .tint(.cyan)
+                }
+                .padding(14)
+                .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.08)))
+
+                VStack(alignment: .leading, spacing: 10) {
                     Text("我的球").font(.headline.weight(.black))
                     ForEach(BallStyle.allCases) { style in
                         BallRow(
@@ -236,6 +254,14 @@ private struct BallPreview: View {
             } else if style == .star {
                 Image(systemName: "star.fill").resizable().scaledToFit().foregroundStyle(ballColor(style))
                     .overlay(Image(systemName: "sparkle").resizable().scaledToFit().padding(size * 0.3).foregroundStyle(.white))
+            } else if style == .diamond {
+                Image(systemName: "diamond.fill").resizable().scaledToFit().foregroundStyle(ballColor(style))
+                    .overlay(Image(systemName: "diamond").resizable().scaledToFit().padding(size * 0.2).foregroundStyle(.white))
+            } else if style == .shuriken {
+                ZStack {
+                    Image(systemName: "star.fill").resizable().scaledToFit().foregroundStyle(ballColor(style))
+                    Image(systemName: "diamond.fill").resizable().scaledToFit().padding(size * 0.25).foregroundStyle(.white)
+                }
             } else {
                 Circle().fill(ballColor(style))
                     .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: max(1, size * 0.045)))
@@ -251,6 +277,10 @@ private struct BallPreview: View {
                         } else if style == .rainbow {
                             AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .pink, .red], center: .center)
                                 .clipShape(Circle()).padding(size * 0.2)
+                        } else if style == .nova {
+                            Image(systemName: "sparkles").resizable().scaledToFit().padding(size * 0.22).foregroundStyle(.white)
+                        } else if style == .bubble {
+                            Circle().stroke(.white.opacity(0.75), lineWidth: max(1, size * 0.045)).padding(size * 0.2)
                         } else {
                             Circle().stroke(.cyan.opacity(0.9), lineWidth: max(1, size * 0.07)).padding(size * 0.24)
                         }
@@ -274,6 +304,10 @@ private func ballColor(_ style: BallStyle) -> Color {
     case .phantom: return .purple.opacity(0.72)
     case .rainbow: return .cyan
     case .star: return .yellow
+    case .diamond: return .pink
+    case .shuriken: return .red
+    case .nova: return .indigo
+    case .bubble: return .cyan.opacity(0.65)
     }
 }
 
@@ -346,8 +380,14 @@ private struct GameBoardView: View {
                 SpriteView(scene: scene)
                     .ignoresSafeArea(edges: .bottom)
                     .accessibilityLabel("Brick Rain game board. Drag to aim and release to fire.")
-                    .onAppear { scene.size = proxy.size }
+                    .onAppear {
+                        scene.size = proxy.size
+                        scene.setHighRefreshRateEnabled(session.highRefreshRateEnabled)
+                    }
                     .onChange(of: proxy.size) { _, newSize in scene.size = newSize }
+                    .onChange(of: session.highRefreshRateEnabled) { _, enabled in
+                        scene.setHighRefreshRateEnabled(enabled)
+                    }
                     .onChange(of: recoveryRequest) { _, _ in scene.clearBottomThreeRowsAndContinue() }
 
                 HStack(spacing: 10) {

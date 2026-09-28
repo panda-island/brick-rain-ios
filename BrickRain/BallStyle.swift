@@ -11,6 +11,10 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
     case phantom
     case rainbow
     case star
+    case diamond
+    case shuriken
+    case nova
+    case bubble
 
     var id: String { rawValue }
 
@@ -26,6 +30,10 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
         case .phantom: return "幽影球"
         case .rainbow: return "彩虹脈衝球"
         case .star: return "星芒球"
+        case .diamond: return "鑽石折射球"
+        case .shuriken: return "旋刃球"
+        case .nova: return "新星核心球"
+        case .bubble: return "量子泡泡球"
         }
     }
 
@@ -41,6 +49,10 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
         case .phantom: return "半透明球體，撞擊時留下雙層幽影"
         case .rainbow: return "拖出變色光跡，撞擊時綻放彩色火花"
         case .star: return "星形外觀，撞擊時放射五道星芒"
+        case .diamond: return "菱形晶體高速自轉，撞擊時散射粉色碎光"
+        case .shuriken: return "四刃外型持續旋轉，撞擊時迸出交叉刀光"
+        case .nova: return "紫藍雙核心，撞擊時展開大型新星光環"
+        case .bubble: return "輕盈透明球體，撞擊時產生多層水波"
         }
     }
 
@@ -56,12 +68,16 @@ enum BallStyle: String, CaseIterable, Codable, Identifiable {
         case .phantom: return 5.3
         case .rainbow: return 5.7
         case .star: return 6.1
+        case .diamond: return 5.8
+        case .shuriken: return 6.5
+        case .nova: return 7.1
+        case .bubble: return 4.9
         }
     }
 
     var spinsInFlight: Bool {
         switch self {
-        case .triangle, .hexagon, .pixel, .star: return true
+        case .triangle, .hexagon, .pixel, .star, .diamond, .shuriken: return true
         default: return false
         }
     }

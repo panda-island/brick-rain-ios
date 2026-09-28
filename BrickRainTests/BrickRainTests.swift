@@ -40,13 +40,27 @@ final class BrickRainTests: XCTestCase {
 
     func testEveryDrawStyleHasAUniqueIdentifier() {
         XCTAssertEqual(Set(BallStyle.allCases.map(\.rawValue)).count, BallStyle.allCases.count)
-        XCTAssertEqual(BallStyle.allCases.count, 10)
+        XCTAssertEqual(BallStyle.allCases.count, 14)
     }
 
     func testPolygonBallsSpinInFlight() {
         let spinning = Set(BallStyle.allCases.filter(\.spinsInFlight))
-        XCTAssertEqual(spinning, Set([.triangle, .hexagon, .pixel, .star]))
+        XCTAssertEqual(spinning, Set([.triangle, .hexagon, .pixel, .star, .diamond, .shuriken]))
         XCTAssertFalse(BallStyle.mini.spinsInFlight)
+    }
+
+    func testHighRefreshRatePreferencePersists() {
+        let key = "highRefreshRateEnabled"
+        let previous = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+
+        let session = GameSession()
+        session.setHighRefreshRateEnabled(true)
+        XCTAssertTrue(session.highRefreshRateEnabled)
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: key))
     }
 
     func testVolleyCompletionUsesActualVisibleBalls() {
