@@ -1003,7 +1003,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.particleScaleSpeed = -0.52
         emitter.particleRotationRange = .pi * 2
         emitter.particleRotationSpeed = 3.2
-        emitter.particleRotationSpeedRange = 4.5
         emitter.particlePositionRange = CGVector(dx: 12, dy: 12)
         addChild(emitter)
         emitter.run(.sequence([.wait(forDuration: 1.15), .removeFromParent()]))
