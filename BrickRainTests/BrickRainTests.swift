@@ -60,15 +60,15 @@ final class BrickRainTests: XCTestCase {
             position: CGPoint(x: -20, y: 300), velocity: CGVector(dx: -1_040, dy: 200),
             radius: 5, boardWidth: 390, ceilingY: 700
         )
-        XCTAssertEqual(left.position.x, 5)
+        XCTAssertEqual(left.position.x, 30)
         XCTAssertGreaterThan(left.velocity.dx, 0)
 
         let topRight = GameScene.containedFlight(
             position: CGPoint(x: 410, y: 720), velocity: CGVector(dx: 1_040, dy: 900),
             radius: 5, boardWidth: 390, ceilingY: 700
         )
-        XCTAssertEqual(topRight.position.x, 385)
-        XCTAssertEqual(topRight.position.y, 695)
+        XCTAssertEqual(topRight.position.x, 360)
+        XCTAssertEqual(topRight.position.y, 670)
         XCTAssertLessThan(topRight.velocity.dx, 0)
         XCTAssertLessThan(topRight.velocity.dy, 0)
     }
@@ -76,7 +76,7 @@ final class BrickRainTests: XCTestCase {
     func testHighRoundVolleyLaunchesWithinAReasonableWindow() {
         let normal = GameScene.adaptiveLaunchInterval(totalBallCount: 1_000, isFastForwarding: false)
         let fast = GameScene.adaptiveLaunchInterval(totalBallCount: 1_000, isFastForwarding: true)
-        XCTAssertLessThanOrEqual(normal * 1_000, 22.01)
+        XCTAssertLessThanOrEqual(normal * 1_000, 48.01)
         XCTAssertEqual(fast, normal / 2, accuracy: 0.000_001)
         XCTAssertEqual(GameScene.adaptiveLaunchInterval(totalBallCount: 10, isFastForwarding: false), 0.075)
     }

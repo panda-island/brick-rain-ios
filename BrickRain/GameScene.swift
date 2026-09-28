@@ -15,7 +15,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private let ballSpeed: CGFloat = 520
     private let launchInterval = 0.075
     private let fastForwardMultiplier: CGFloat = 2
-    private let maximumSimultaneousBalls = 180
+    private let maximumSimultaneousBalls = 96
     private var cellSize: CGFloat = 0
     private var roundNumber = 1
     private var totalBalls = 1
@@ -55,6 +55,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard !didSetUp else { return }
         didSetUp = true
         view.isMultipleTouchEnabled = false
+        view.preferredFramesPerSecond = 60
+        view.shouldCullNonVisibleNodes = true
+        view.ignoresSiblingOrder = true
         configureBoard()
         if let progress = ProgressStore.load() {
             restore(progress)
@@ -267,8 +270,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     ) -> TimeInterval {
         // A fixed delay makes a 1,000-ball volley spend 75 seconds just launching.
         // Keep the launch window bounded while the active-ball cap protects physics.
-        let boundedWindowInterval = 22 / Double(max(1, totalBallCount))
-        let interval = max(0.018, min(baseInterval, boundedWindowInterval))
+        let boundedWindowInterval = 48 / Double(max(1, totalBallCount))
+        let interval = max(0.045, min(baseInterval, boundedWindowInterval))
         return interval / (isFastForwarding ? 2 : 1)
     }
 
@@ -469,7 +472,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard isFiring else { return }
         let shouldAddTrail = currentTime - lastTrailTime >= 0.055
         if shouldAddTrail { lastTrailTime = currentTime }
-        let trailStride = max(1, activeBalls / 28)
+        let trailStride = max(1, activeBalls / 20)
         var ballIndex = 0
         enumerateChildNodes(withName: "ball") { [weak self] node, _ in
             guard let self else { return }
@@ -541,18 +544,32 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let maximumX = max(radius, boardWidth - radius)
         let maximumY = ceilingY - radius
 
-        if position.x < minimumX {
-            position.x = minimumX
-            velocity.dx = abs(velocity.dx)
-        } else if position.x > maximumX {
-            position.x = maximumX
-            velocity.dx = -abs(velocity.dx)
+        if position.x < minimumX || position.x > maximumX {
+            let reflected = reflectedCoordinate(position.x, minimum: minimumX, maximum: maximumX)
+            position.x = reflected.value
+            if reflected.reversesDirection { velocity.dx *= -1 }
         }
         if position.y > maximumY {
-            position.y = maximumY
+            // Preserve the distance travelled past the ceiling. Clamping to the
+            // wall makes a dropped frame look like the ball jumped backwards.
+            position.y = maximumY - (position.y - maximumY)
             velocity.dy = -abs(velocity.dy)
         }
         return (position, velocity)
+    }
+
+    private static func reflectedCoordinate(
+        _ value: CGFloat,
+        minimum: CGFloat,
+        maximum: CGFloat
+    ) -> (value: CGFloat, reversesDirection: Bool) {
+        let span = maximum - minimum
+        guard span > 0 else { return (minimum, false) }
+        let period = span * 2
+        var offset = (value - minimum).truncatingRemainder(dividingBy: period)
+        if offset < 0 { offset += period }
+        if offset <= span { return (minimum + offset, false) }
+        return (maximum - (offset - span), true)
     }
 
     private var effectiveBallSpeed: CGFloat {
@@ -980,7 +997,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             guard let self else { return }
             guard self.brickValues[ObjectIdentifier(node)] != nil else { return }
             let destinationY = node.position.y - self.cellSize
-            node.run(.moveTo(y: destinationY, duration: 0.24))
+            if node.userData == nil { node.userData = NSMutableDictionary() }
+            node.userData?["rowDestinationY"] = destinationY
+            node.run(.moveTo(y: destinationY, duration: 0.24), withKey: "rowDrop")
             if self.brickTouchesLossLine(centerY: destinationY) {
                 reachedBottom = true
             }
@@ -992,8 +1011,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 return
             }
             let destinationY = node.position.y - self.cellSize
-            node.run(.moveTo(y: destinationY, duration: 0.24))
-            if destinationY < self.floorY { node.run(.sequence([.wait(forDuration: 0.24), .removeFromParent()])) }
+            node.userData?["rowDestinationY"] = destinationY
+            node.run(.moveTo(y: destinationY, duration: 0.24), withKey: "rowDrop")
         }
         activatedPowerUps.removeAll()
         publish(.firing)
@@ -1005,6 +1024,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func completeTurn(reachedBottom: Bool) {
+        finalizeRowMovement()
         isTransitioning = false
         if reachedBottom {
             saveProgress()
@@ -1015,6 +1035,19 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             addRow(extraBallCount: extraBallCount)
             saveProgress()
             publish(.ready)
+        }
+    }
+
+    private func finalizeRowMovement() {
+        for node in children where node.name == "brick" || node.name == "pickup" {
+            guard let destination = (node.userData?["rowDestinationY"] as? NSNumber)?.doubleValue else { continue }
+            node.removeAction(forKey: "rowDrop")
+            node.position.y = CGFloat(destination)
+            node.userData?.removeObject(forKey: "rowDestinationY")
+            if node.name == "pickup", node.position.y < floorY {
+                activatedPowerUps.remove(ObjectIdentifier(node))
+                node.removeFromParent()
+            }
         }
     }
 
