@@ -1,4 +1,5 @@
 import SpriteKit
+import UIKit
 
 @MainActor
 final class GameScene: SKScene, SKPhysicsContactDelegate {
@@ -39,6 +40,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var comboCount = 0
     private var earnedClearBonus = false
     private var lastEffectTimes: [String: TimeInterval] = [:]
+    private lazy var squareParticleTexture: SKTexture = {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        }
+        return SKTexture(image: image)
+    }()
 
     init(size: CGSize, session: GameSession) {
         self.session = session
@@ -716,9 +724,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             lastPopTime = sceneTime
             run(.playSoundFileNamed("pop.wav", waitForCompletion: false))
         }
-        if allowsVisualEffect("brickParticles", normalInterval: 0.006, highLoadInterval: 0.04) {
-            let particleCount = isHighLoadVolley ? (value <= 1 ? 3 : 1) : (value <= 1 ? 9 : 4)
-            emitBrickParticles(at: brick.position, color: (brick as? SKShapeNode)?.fillColor ?? .white, count: particleCount)
+        let brickColor = (brick as? SKShapeNode)?.fillColor ?? .white
+        if value <= 1 {
+            if allowsVisualEffect("brickBreakParticles", normalInterval: 0.012, highLoadInterval: 0.055) {
+                emitBrickBreakParticles(at: brick.position, color: brickColor, count: isHighLoadVolley ? 20 : 34)
+            }
+        } else if allowsVisualEffect("brickParticles", normalInterval: 0.012, highLoadInterval: 0.05) {
+            emitBrickParticles(at: brick.position, color: brickColor, count: isHighLoadVolley ? 1 : 4)
         }
         if value <= 1 {
             brickValues[key] = nil
@@ -967,6 +979,34 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             ]))
             addChild(shard)
         }
+    }
+
+    private func emitBrickBreakParticles(at position: CGPoint, color: UIColor, count: Int) {
+        let emitter = SKEmitterNode()
+        emitter.position = position
+        emitter.zPosition = 19
+        emitter.targetNode = self
+        emitter.particleTexture = squareParticleTexture
+        emitter.particleColor = color
+        emitter.particleColorBlendFactor = 1
+        emitter.particleBirthRate = CGFloat(count) / 0.09
+        emitter.numParticlesToEmit = count
+        emitter.particleLifetime = 0.78
+        emitter.particleLifetimeRange = 0.2
+        emitter.emissionAngleRange = .pi * 2
+        emitter.particleSpeed = 46
+        emitter.particleSpeedRange = 28
+        emitter.particleAlpha = 0.95
+        emitter.particleAlphaSpeed = -1.05
+        emitter.particleScale = 0.8
+        emitter.particleScaleRange = 0.38
+        emitter.particleScaleSpeed = -0.52
+        emitter.particleRotationRange = .pi * 2
+        emitter.particleRotationSpeed = 3.2
+        emitter.particleRotationSpeedRange = 4.5
+        emitter.particlePositionRange = CGVector(dx: 12, dy: 12)
+        addChild(emitter)
+        emitter.run(.sequence([.wait(forDuration: 1.15), .removeFromParent()]))
     }
 
     private func showCombo() {

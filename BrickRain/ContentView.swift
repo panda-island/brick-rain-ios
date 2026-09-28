@@ -147,8 +147,8 @@ private struct HomeView: View {
                         set: { session.setHighRefreshRateEnabled($0) }
                     )) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("120 Hz 螢幕更新率").font(.subheadline.weight(.bold))
-                            Text("支援 ProMotion 的裝置可顯示更流暢的球體與特效")
+                            Text("全介面 120 Hz").font(.subheadline.weight(.bold))
+                            Text("主畫面、抽球、彈窗、球體與特效都使用 ProMotion 更新率")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
