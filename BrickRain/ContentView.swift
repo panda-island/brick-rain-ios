@@ -350,13 +350,31 @@ private struct GameBoardView: View {
                     .onChange(of: proxy.size) { _, newSize in scene.size = newSize }
                     .onChange(of: recoveryRequest) { _, _ in scene.clearBottomThreeRowsAndContinue() }
 
-                Button { scene.recallAllBalls() } label: {
-                    Image(systemName: "arrow.down.to.line.compact")
-                        .font(.headline.weight(.bold)).frame(width: 44, height: 44)
-                        .background(.black.opacity(0.65), in: Circle()).overlay(Circle().stroke(.white.opacity(0.28)))
+                HStack(spacing: 10) {
+                    Button { scene.toggleFastForward() } label: {
+                        VStack(spacing: 0) {
+                            Image(systemName: "forward.fill")
+                            Text("2×").font(.system(size: 9, weight: .black, design: .rounded))
+                        }
+                        .font(.subheadline.weight(.bold)).frame(width: 44, height: 44)
+                        .foregroundStyle(session.isFastForwarding ? .yellow : .white)
+                        .background(.black.opacity(0.65), in: Circle())
+                        .overlay(Circle().stroke(session.isFastForwarding ? .yellow.opacity(0.8) : .white.opacity(0.28)))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!session.canFastForward)
+                    .opacity(session.canFastForward ? 1 : 0.3)
+                    .accessibilityLabel(session.isFastForwarding ? "Disable two times speed" : "Enable two times speed")
+
+                    Button { scene.recallAllBalls() } label: {
+                        Image(systemName: "arrow.down.to.line.compact")
+                            .font(.headline.weight(.bold)).frame(width: 44, height: 44)
+                            .background(.black.opacity(0.65), in: Circle()).overlay(Circle().stroke(.white.opacity(0.28)))
+                    }
+                    .buttonStyle(.plain).disabled(!session.canRecall).opacity(session.canRecall ? 1 : 0.3)
+                    .accessibilityLabel("Recall all balls")
                 }
-                .buttonStyle(.plain).disabled(!session.canRecall).opacity(session.canRecall ? 1 : 0.3).padding(16)
-                .accessibilityLabel("Recall all balls")
+                .padding(16)
             }
         }
     }

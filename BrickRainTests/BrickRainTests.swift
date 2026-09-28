@@ -49,6 +49,12 @@ final class BrickRainTests: XCTestCase {
         XCTAssertFalse(BallStyle.mini.spinsInFlight)
     }
 
+    func testVolleyCompletionUsesActualVisibleBalls() {
+        XCTAssertTrue(GameScene.volleyIsComplete(ballsToLaunch: 0, visibleBallCount: 0))
+        XCTAssertFalse(GameScene.volleyIsComplete(ballsToLaunch: 1, visibleBallCount: 0))
+        XCTAssertFalse(GameScene.volleyIsComplete(ballsToLaunch: 0, visibleBallCount: 1))
+    }
+
     func testSavedObjectsSnapBackToWholeRows() {
         let cellSize: CGFloat = 390 / 7
         let spawnY: CGFloat = 700 - 12 - cellSize * 1.5

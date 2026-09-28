@@ -14,6 +14,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var ballRadius: CGFloat { session.selectedBallStyle.radius }
     private let ballSpeed: CGFloat = 520
     private let launchInterval = 0.075
+    private let fastForwardMultiplier: CGFloat = 2
     private var cellSize: CGFloat = 0
     private var roundNumber = 1
     private var totalBalls = 1
@@ -28,6 +29,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var isTransitioning = false
     private var didSetUp = false
     private var launchTimer: Timer?
+    private var launchDirection = CGVector(dx: 0, dy: 1)
     private var brickValues: [ObjectIdentifier: Int] = [:]
     private var activatedPowerUps = Set<ObjectIdentifier>()
     private var sceneTime: TimeInterval = 0
@@ -216,6 +218,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func fire(toward target: CGPoint) {
         isFiring = true
+        session.isFastForwarding = false
         ballsToLaunch = totalBalls
         updateRemainingBallLabel(totalBalls)
         activeBalls = 0
@@ -224,17 +227,27 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         comboCount = 0
         earnedClearBonus = false
         let direction = normalizedDirection(to: target)
-        publish(.firing, canRecall: true)
+        launchDirection = direction
+        publish(.firing, canRecall: true, canFastForward: true)
         launchOne(direction: direction)
+        scheduleLaunchTimer()
+    }
 
+    private func scheduleLaunchTimer() {
         launchTimer?.invalidate()
-        launchTimer = Timer.scheduledTimer(withTimeInterval: launchInterval, repeats: true) { [weak self] timer in
+        guard ballsToLaunch > 0 else {
+            launchTimer = nil
+            return
+        }
+        let interval = launchInterval / (session.isFastForwarding ? Double(fastForwardMultiplier) : 1)
+        launchTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
             Task { @MainActor in
                 guard let self else { timer.invalidate(); return }
                 if self.ballsToLaunch > 0 {
-                    self.launchOne(direction: direction)
+                    self.launchOne(direction: self.launchDirection)
                 } else {
                     timer.invalidate()
+                    self.launchTimer = nil
                 }
             }
         }
@@ -263,7 +276,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.physicsBody?.categoryBitMask = Category.ball
         ball.physicsBody?.collisionBitMask = Category.brick | Category.wall
         ball.physicsBody?.contactTestBitMask = Category.brick | Category.pickup
-        ball.physicsBody?.velocity = CGVector(dx: direction.dx * ballSpeed, dy: direction.dy * ballSpeed)
+        let speed = effectiveBallSpeed
+        ball.physicsBody?.velocity = CGVector(dx: direction.dx * speed, dy: direction.dy * speed)
         ball.userData?["lastDX"] = direction.dx
         ball.userData?["lastDY"] = direction.dy
         if session.selectedBallStyle.spinsInFlight {
@@ -439,11 +453,19 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         enumerateChildNodes(withName: "ball") { [weak self] node, _ in
             guard let self else { return }
             if shouldAddTrail { self.addTrail(at: node.position, color: node.userData?["trailColor"] as? UIColor ?? .white) }
-            if node.position.y <= self.floorY + self.ballRadius + 3,
-               (node.physicsBody?.velocity.dy ?? 0) < 0 {
-                self.land(ball: node)
+            let escapedBoard = !node.position.x.isFinite
+                || !node.position.y.isFinite
+                || node.position.y < self.floorY - self.cellSize
+                || node.position.y > self.topY + self.cellSize
+                || node.position.x < -self.cellSize
+                || node.position.x > self.size.width + self.cellSize
+            let reachedFloor = node.position.y <= self.floorY + self.ballRadius + 3
+                && (node.physicsBody?.velocity.dy ?? 0) < 0
+            if escapedBoard || reachedFloor {
+                self.land(ball: node, recordsLandingPosition: reachedFloor)
             }
         }
+        finishTurnIfVolleyComplete()
     }
 
     override func didSimulatePhysics() {
@@ -454,27 +476,54 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             if speed > 20 {
                 let dx = body.velocity.dx / speed
                 let dy = body.velocity.dy / speed
-                body.velocity = CGVector(dx: dx * self.ballSpeed, dy: dy * self.ballSpeed)
+                body.velocity = CGVector(dx: dx * self.effectiveBallSpeed, dy: dy * self.effectiveBallSpeed)
                 node.userData?["lastDX"] = dx
                 node.userData?["lastDY"] = dy
             } else {
                 let dx = CGFloat((node.userData?["lastDX"] as? NSNumber)?.doubleValue ?? 0)
                 let dy = CGFloat((node.userData?["lastDY"] as? NSNumber)?.doubleValue ?? 1)
-                body.velocity = CGVector(dx: dx * self.ballSpeed, dy: dy * self.ballSpeed)
+                body.velocity = CGVector(dx: dx * self.effectiveBallSpeed, dy: dy * self.effectiveBallSpeed)
             }
         }
     }
 
-    private func land(ball: SKNode) {
+    private var effectiveBallSpeed: CGFloat {
+        ballSpeed * (session.isFastForwarding ? fastForwardMultiplier : 1)
+    }
+
+    private func land(ball: SKNode, recordsLandingPosition: Bool = true) {
         guard ball.parent != nil else { return }
-        if firstLandingX == nil {
+        if recordsLandingPosition, firstLandingX == nil {
             firstLandingX = min(max(ball.position.x, ballRadius + 2), size.width - ballRadius - 2)
         }
         ball.removeFromParent()
-        activeBalls -= 1
-        if activeBalls == 0 && ballsToLaunch == 0 {
-            finishTurn()
+        activeBalls = max(0, activeBalls - 1)
+    }
+
+    static func volleyIsComplete(ballsToLaunch: Int, visibleBallCount: Int) -> Bool {
+        ballsToLaunch == 0 && visibleBallCount == 0
+    }
+
+    private func finishTurnIfVolleyComplete() {
+        guard isFiring, !isTransitioning else { return }
+        let visibleBallCount = children.lazy.filter { $0.name == "ball" }.count
+        guard Self.volleyIsComplete(ballsToLaunch: ballsToLaunch, visibleBallCount: visibleBallCount) else { return }
+        activeBalls = 0
+        finishTurn()
+    }
+
+    func toggleFastForward() {
+        guard isFiring, !isTransitioning else { return }
+        session.isFastForwarding.toggle()
+        enumerateChildNodes(withName: "ball") { [weak self] node, _ in
+            guard let self, let body = node.physicsBody else { return }
+            let currentSpeed = max(hypot(body.velocity.dx, body.velocity.dy), 1)
+            body.velocity = CGVector(
+                dx: body.velocity.dx / currentSpeed * self.effectiveBallSpeed,
+                dy: body.velocity.dy / currentSpeed * self.effectiveBallSpeed
+            )
         }
+        scheduleLaunchTimer()
     }
 
     func recallAllBalls() {
@@ -488,6 +537,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         enumerateChildNodes(withName: "ball") { node, _ in node.removeFromParent() }
         activeBalls = 0
+        session.isFastForwarding = false
         finishTurn()
     }
 
@@ -821,8 +871,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func finishTurn() {
+        launchTimer?.invalidate()
+        launchTimer = nil
         isFiring = false
         isTransitioning = true
+        session.isFastForwarding = false
         totalBalls += collectedBalls
         roundNumber += 1
         hitCount = 0
@@ -1292,13 +1345,18 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
-    private func publish(_ phase: GameSession.Phase, canRecall: Bool = false) {
+    private func publish(
+        _ phase: GameSession.Phase,
+        canRecall: Bool = false,
+        canFastForward: Bool = false
+    ) {
         session.update(
             round: roundNumber,
             ballCount: totalBalls,
             hitCount: hitCount,
             phase: phase,
-            canRecall: canRecall
+            canRecall: canRecall,
+            canFastForward: canFastForward
         )
     }
 

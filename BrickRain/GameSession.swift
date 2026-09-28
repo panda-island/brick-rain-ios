@@ -19,6 +19,8 @@ final class GameSession {
     var soundEnabled = true
     var hapticsEnabled = UserDefaults.standard.object(forKey: "hapticsEnabled") as? Bool ?? true
     var canRecall = false
+    var canFastForward = false
+    var isFastForwarding = false
     var coins = BallCollectionStore.coins
     var unlockedBalls = BallCollectionStore.unlocked
     var selectedBallStyle = BallCollectionStore.selected
@@ -60,12 +62,20 @@ final class GameSession {
         return .unlocked(style)
     }
 
-    func update(round: Int, ballCount: Int, hitCount: Int, phase: Phase, canRecall: Bool = false) {
+    func update(
+        round: Int,
+        ballCount: Int,
+        hitCount: Int,
+        phase: Phase,
+        canRecall: Bool = false,
+        canFastForward: Bool = false
+    ) {
         self.round = round
         self.ballCount = ballCount
         self.hitCount = hitCount
         self.phase = phase
         self.canRecall = canRecall
+        self.canFastForward = canFastForward
         if round > bestRound {
             bestRound = round
             UserDefaults.standard.set(round, forKey: "bestRound")
