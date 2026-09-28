@@ -456,9 +456,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             let escapedBoard = !node.position.x.isFinite
                 || !node.position.y.isFinite
                 || node.position.y < self.floorY - self.cellSize
-                || node.position.y > self.topY + self.cellSize
-                || node.position.x < -self.cellSize
-                || node.position.x > self.size.width + self.cellSize
             let reachedFloor = node.position.y <= self.floorY + self.ballRadius + 3
                 && (node.physicsBody?.velocity.dy ?? 0) < 0
             if escapedBoard || reachedFloor {
@@ -472,6 +469,25 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard isFiring else { return }
         enumerateChildNodes(withName: "ball") { [weak self] node, _ in
             guard let self, let body = node.physicsBody else { return }
+            guard node.position.x.isFinite, node.position.y.isFinite,
+                  body.velocity.dx.isFinite, body.velocity.dy.isFinite else {
+                self.land(ball: node, recordsLandingPosition: false)
+                return
+            }
+            if node.position.y <= self.floorY + self.ballRadius + 3, body.velocity.dy < 0 {
+                self.land(ball: node)
+                return
+            }
+
+            let contained = Self.containedFlight(
+                position: node.position,
+                velocity: body.velocity,
+                radius: self.ballRadius,
+                boardWidth: self.size.width,
+                ceilingY: self.topY
+            )
+            node.position = contained.position
+            body.velocity = contained.velocity
             let speed = hypot(body.velocity.dx, body.velocity.dy)
             if speed > 20 {
                 let dx = body.velocity.dx / speed
@@ -485,6 +501,34 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 body.velocity = CGVector(dx: dx * self.effectiveBallSpeed, dy: dy * self.effectiveBallSpeed)
             }
         }
+        finishTurnIfVolleyComplete()
+    }
+
+    static func containedFlight(
+        position: CGPoint,
+        velocity: CGVector,
+        radius: CGFloat,
+        boardWidth: CGFloat,
+        ceilingY: CGFloat
+    ) -> (position: CGPoint, velocity: CGVector) {
+        var position = position
+        var velocity = velocity
+        let minimumX = radius
+        let maximumX = max(radius, boardWidth - radius)
+        let maximumY = ceilingY - radius
+
+        if position.x < minimumX {
+            position.x = minimumX
+            velocity.dx = abs(velocity.dx)
+        } else if position.x > maximumX {
+            position.x = maximumX
+            velocity.dx = -abs(velocity.dx)
+        }
+        if position.y > maximumY {
+            position.y = maximumY
+            velocity.dy = -abs(velocity.dy)
+        }
+        return (position, velocity)
     }
 
     private var effectiveBallSpeed: CGFloat {

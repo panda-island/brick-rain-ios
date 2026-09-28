@@ -55,6 +55,24 @@ final class BrickRainTests: XCTestCase {
         XCTAssertFalse(GameScene.volleyIsComplete(ballsToLaunch: 0, visibleBallCount: 1))
     }
 
+    func testFastBallIsReflectedBackInsideEveryWall() {
+        let left = GameScene.containedFlight(
+            position: CGPoint(x: -20, y: 300), velocity: CGVector(dx: -1_040, dy: 200),
+            radius: 5, boardWidth: 390, ceilingY: 700
+        )
+        XCTAssertEqual(left.position.x, 5)
+        XCTAssertGreaterThan(left.velocity.dx, 0)
+
+        let topRight = GameScene.containedFlight(
+            position: CGPoint(x: 410, y: 720), velocity: CGVector(dx: 1_040, dy: 900),
+            radius: 5, boardWidth: 390, ceilingY: 700
+        )
+        XCTAssertEqual(topRight.position.x, 385)
+        XCTAssertEqual(topRight.position.y, 695)
+        XCTAssertLessThan(topRight.velocity.dx, 0)
+        XCTAssertLessThan(topRight.velocity.dy, 0)
+    }
+
     func testSavedObjectsSnapBackToWholeRows() {
         let cellSize: CGFloat = 390 / 7
         let spawnY: CGFloat = 700 - 12 - cellSize * 1.5
