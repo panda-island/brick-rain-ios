@@ -34,7 +34,6 @@ final class GameSession {
     var phase: Phase = .ready
     var soundEnabled = UserDefaults.standard.object(forKey: "soundEnabled") as? Bool ?? true
     var hapticsEnabled = UserDefaults.standard.object(forKey: "hapticsEnabled") as? Bool ?? true
-    var highRefreshRateEnabled = UserDefaults.standard.bool(forKey: "highRefreshRateEnabled")
     var particleEffectLevel: ParticleEffectLevel = {
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: "particleEffectLevel") != nil else { return .standard }
@@ -61,11 +60,6 @@ final class GameSession {
     func setHapticsEnabled(_ enabled: Bool) {
         hapticsEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: "hapticsEnabled")
-    }
-
-    func setHighRefreshRateEnabled(_ enabled: Bool) {
-        highRefreshRateEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: "highRefreshRateEnabled")
     }
 
     func setParticleEffectLevel(_ level: ParticleEffectLevel) {

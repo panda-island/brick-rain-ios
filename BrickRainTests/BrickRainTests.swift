@@ -49,24 +49,27 @@ final class BrickRainTests: XCTestCase {
         XCTAssertFalse(BallStyle.mini.spinsInFlight)
     }
 
-    func testHighRefreshRatePreferencePersists() {
-        let key = "highRefreshRateEnabled"
-        let previous = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let previous { UserDefaults.standard.set(previous, forKey: key) }
-            else { UserDefaults.standard.removeObject(forKey: key) }
-        }
-
-        let session = GameSession()
-        session.setHighRefreshRateEnabled(true)
-        XCTAssertTrue(session.highRefreshRateEnabled)
-        XCTAssertTrue(UserDefaults.standard.bool(forKey: key))
-    }
-
     func testVolleyCompletionUsesActualVisibleBalls() {
         XCTAssertTrue(GameScene.volleyIsComplete(ballsToLaunch: 0, visibleBallCount: 0))
         XCTAssertFalse(GameScene.volleyIsComplete(ballsToLaunch: 1, visibleBallCount: 0))
         XCTAssertFalse(GameScene.volleyIsComplete(ballsToLaunch: 0, visibleBallCount: 1))
+    }
+
+    func testHitEveryBrickBonusRequiresEveryStartingBrick() {
+        let firstObject = NSObject()
+        let secondObject = NSObject()
+        let first = ObjectIdentifier(firstObject)
+        let second = ObjectIdentifier(secondObject)
+        XCTAssertFalse(GameScene.hitEveryTarget(targets: [], hits: []))
+        XCTAssertFalse(GameScene.hitEveryTarget(targets: [first, second], hits: [first]))
+        XCTAssertTrue(GameScene.hitEveryTarget(targets: [first, second], hits: [first, second]))
+    }
+
+    func testMultipleOfTenRoundGuaranteesDoubleStrengthBrick() {
+        XCTAssertEqual(GameScene.brickValue(round: 10, brickIndex: 2, guaranteedDoubleIndex: 2, bonusRoll: 99), 20)
+        XCTAssertEqual(GameScene.brickValue(round: 10, brickIndex: 1, guaranteedDoubleIndex: 2, bonusRoll: 24), 20)
+        XCTAssertEqual(GameScene.brickValue(round: 10, brickIndex: 1, guaranteedDoubleIndex: 2, bonusRoll: 25), 10)
+        XCTAssertEqual(GameScene.brickValue(round: 11, brickIndex: 2, guaranteedDoubleIndex: 2, bonusRoll: 0), 11)
     }
 
     func testFastBallIsReflectedBackInsideEveryWall() {

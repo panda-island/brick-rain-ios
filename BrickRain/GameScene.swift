@@ -39,6 +39,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var lastPopTime: TimeInterval = -1
     private var comboCount = 0
     private var earnedClearBonus = false
+    private var turnTargetBricks = Set<ObjectIdentifier>()
+    private var turnHitBricks = Set<ObjectIdentifier>()
+    private var earnedHitEveryBrickBonus = false
     private var lastEffectTimes: [String: TimeInterval] = [:]
     private lazy var squareParticleTexture: SKTexture = {
         let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
@@ -63,7 +66,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard !didSetUp else { return }
         didSetUp = true
         view.isMultipleTouchEnabled = false
-        view.preferredFramesPerSecond = session.highRefreshRateEnabled ? 120 : 60
         view.shouldCullNonVisibleNodes = true
         view.ignoresSiblingOrder = true
         configureBoard()
@@ -75,10 +77,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             saveProgress()
         }
         publish(hasBrickTouchingLossLine() ? .gameOver : .ready)
-    }
-
-    func setHighRefreshRateEnabled(_ enabled: Bool) {
-        view?.preferredFramesPerSecond = enabled ? 120 : 60
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -242,6 +240,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         firstLandingX = nil
         comboCount = 0
         earnedClearBonus = false
+        turnTargetBricks = Set(brickValues.keys)
+        turnHitBricks.removeAll(keepingCapacity: true)
+        earnedHitEveryBrickBonus = false
         let direction = normalizedDirection(to: target)
         launchDirection = direction
         publish(.firing, canRecall: true, canFastForward: true)
@@ -663,6 +664,24 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ballsToLaunch == 0 && visibleBallCount == 0
     }
 
+    static func hitEveryTarget(
+        targets: Set<ObjectIdentifier>,
+        hits: Set<ObjectIdentifier>
+    ) -> Bool {
+        !targets.isEmpty && targets.isSubset(of: hits)
+    }
+
+    static func brickValue(
+        round: Int,
+        brickIndex: Int,
+        guaranteedDoubleIndex: Int?,
+        bonusRoll: Int
+    ) -> Int {
+        let isDoubleStrength = round.isMultiple(of: 10)
+            && (brickIndex == guaranteedDoubleIndex || bonusRoll < 25)
+        return isDoubleStrength ? round * 2 : round
+    }
+
     private func finishTurnIfVolleyComplete() {
         guard isFiring, !isTransitioning else { return }
         let visibleBallCount = children.lazy.filter { $0.name == "ball" }.count
@@ -718,6 +737,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private func hit(brick: SKNode) {
         let key = ObjectIdentifier(brick)
         guard let value = brickValues[key] else { return }
+        if turnTargetBricks.contains(key) {
+            turnHitBricks.insert(key)
+        }
         hitCount += 1
         session.hitCount = hitCount
         if session.soundEnabled, sceneTime - lastPopTime > 0.028 {
@@ -726,13 +748,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         let brickColor = (brick as? SKShapeNode)?.fillColor ?? .white
         if value <= 1 {
-            if allowsVisualEffect("brickBreakParticles", normalInterval: 0.012, highLoadInterval: 0.055) {
-                emitBrickBreakParticles(
-                    at: brick.position,
-                    color: brickColor,
-                    count: brickBreakParticleCount
-                )
-            }
+            emitBrickBreakParticles(
+                at: brick.position,
+                color: brickColor,
+                count: brickBreakParticleCount
+            )
         } else if allowsVisualEffect("brickParticles", normalInterval: 0.012, highLoadInterval: 0.05) {
             emitBrickParticles(at: brick.position, color: brickColor, count: brickHitParticleCount)
         }
@@ -999,32 +1019,45 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.zPosition = 19
         emitter.targetNode = self
         emitter.particleTexture = squareParticleTexture
+        let startingHue = CGFloat.random(in: 0...1)
+        let colors = (0..<6).map { offset in
+            UIColor(
+                hue: (startingHue + CGFloat(offset) / 6).truncatingRemainder(dividingBy: 1),
+                saturation: 0.92,
+                brightness: 1,
+                alpha: 1
+            )
+        }
         emitter.particleColor = color
         emitter.particleColorBlendFactor = 1
+        emitter.particleColorSequence = SKKeyframeSequence(
+            keyframeValues: colors,
+            times: [0, 0.18, 0.36, 0.54, 0.72, 1]
+        )
         emitter.particleBirthRate = CGFloat(count) / 0.09
         emitter.numParticlesToEmit = count
-        emitter.particleLifetime = 2
-        emitter.particleLifetimeRange = 0.16
+        emitter.particleLifetime = 3
+        emitter.particleLifetimeRange = 0.35
         emitter.emissionAngleRange = .pi * 2
-        emitter.particleSpeed = 28
-        emitter.particleSpeedRange = 18
+        emitter.particleSpeed = 62
+        emitter.particleSpeedRange = 36
         emitter.particleAlpha = 0.95
-        emitter.particleAlphaSpeed = -0.46
+        emitter.particleAlphaSpeed = -0.29
         emitter.particleScale = 0.8
         emitter.particleScaleRange = 0.38
-        emitter.particleScaleSpeed = -0.28
+        emitter.particleScaleSpeed = -0.2
         emitter.particleRotationRange = .pi * 2
         emitter.particleRotationSpeed = 3.2
         emitter.particlePositionRange = CGVector(dx: 12, dy: 12)
         addChild(emitter)
-        emitter.run(.sequence([.wait(forDuration: 2.45), .removeFromParent()]))
+        emitter.run(.sequence([.wait(forDuration: 3.7), .removeFromParent()]))
     }
 
     private var brickBreakParticleCount: Int {
         switch session.particleEffectLevel {
-        case .low: return isHighLoadVolley ? 8 : 14
-        case .standard: return isHighLoadVolley ? 20 : 34
-        case .high: return isHighLoadVolley ? 32 : 56
+        case .low: return isHighLoadVolley ? 10 : 18
+        case .standard: return isHighLoadVolley ? 24 : 42
+        case .high: return isHighLoadVolley ? 40 : 70
         }
     }
 
@@ -1123,6 +1156,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         isTransitioning = true
         session.isFastForwarding = false
         totalBalls += collectedBalls
+        earnedHitEveryBrickBonus = Self.hitEveryTarget(
+            targets: turnTargetBricks,
+            hits: turnHitBricks
+        )
+        if earnedHitEveryBrickBonus {
+            showHitEveryBrickBonus()
+        }
         roundNumber += 1
         hitCount = 0
         launchOrigin.x = firstLandingX ?? launchOrigin.x
@@ -1169,7 +1209,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         } else {
             let extraBallCount = earnedClearBonus ? 2 : 1
             earnedClearBonus = false
-            addRow(extraBallCount: extraBallCount)
+            addRow(
+                extraBallCount: extraBallCount,
+                guaranteedBonusPowerUp: earnedHitEveryBrickBonus
+            )
             saveProgress()
             publish(.ready)
         }
@@ -1234,16 +1277,25 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         publish(.ready)
     }
 
-    private func addRow(extraBallCount: Int = 1) {
+    private func addRow(extraBallCount: Int = 1, guaranteedBonusPowerUp: Bool = false) {
         if roundNumber.isMultiple(of: 10) { showRoundBanner() }
         var occupied = Set<Int>()
-        let brickCount = Int.random(in: 2...5)
-        for _ in 0..<brickCount {
+        let reservedColumns = min(columns - 2, extraBallCount + (guaranteedBonusPowerUp ? 1 : 0))
+        let maximumBrickCount = min(5, columns - reservedColumns)
+        let brickCount = Int.random(in: 2...maximumBrickCount)
+        let guaranteedDoubleIndex = roundNumber.isMultiple(of: 10)
+            ? Int.random(in: 0..<brickCount)
+            : nil
+        for brickIndex in 0..<brickCount {
             var column = Int.random(in: 0..<columns)
             while occupied.contains(column) { column = Int.random(in: 0..<columns) }
             occupied.insert(column)
-            let isDoubleStrength = roundNumber.isMultiple(of: 10) && Int.random(in: 0..<100) < 25
-            let value = isDoubleStrength ? roundNumber * 2 : roundNumber
+            let value = Self.brickValue(
+                round: roundNumber,
+                brickIndex: brickIndex,
+                guaranteedDoubleIndex: guaranteedDoubleIndex,
+                bonusRoll: Int.random(in: 0..<100)
+            )
             let shape: GameProgress.BoardObject.Kind = Int.random(in: 0..<100) < 14 ? .triangleBrick : .brick
             addBrick(
                 column: column,
@@ -1258,6 +1310,14 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             while occupied.contains(column) { column = Int.random(in: 0..<columns) }
             occupied.insert(column)
             addPowerUp(column: column, kind: .extraBall)
+        }
+
+        if guaranteedBonusPowerUp, occupied.count < columns {
+            var column = Int.random(in: 0..<columns)
+            while occupied.contains(column) { column = Int.random(in: 0..<columns) }
+            occupied.insert(column)
+            addPowerUp(column: column, kind: randomBonusPowerUp())
+            earnedHitEveryBrickBonus = false
         }
 
         if occupied.count < columns, Int.random(in: 0..<100) < 45 {
@@ -1433,6 +1493,25 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         ]))
         addChild(label)
         if session.hapticsEnabled { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+    }
+
+    private func showHitEveryBrickBonus() {
+        let label = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+        label.text = "ALL BRICKS HIT  + ITEM"
+        label.fontSize = 20
+        label.fontColor = .systemGreen
+        label.position = CGPoint(x: size.width / 2, y: size.height * 0.54)
+        label.zPosition = 82
+        label.alpha = 0
+        label.setScale(0.72)
+        label.run(.sequence([
+            .group([.fadeIn(withDuration: 0.12), .scale(to: 1.08, duration: 0.18)]),
+            .scale(to: 1, duration: 0.08),
+            .wait(forDuration: 0.58),
+            .group([.fadeOut(withDuration: 0.22), .moveBy(x: 0, y: 16, duration: 0.22)]),
+            .removeFromParent()
+        ]))
+        addChild(label)
     }
 
     private func powerUpKind(for node: SKNode) -> GameProgress.BoardObject.Kind {

@@ -154,24 +154,6 @@ private struct HomeView: View {
                 .buttonStyle(.bordered).disabled(!session.canDrawBall)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("設定").font(.headline.weight(.black))
-                    Toggle(isOn: Binding(
-                        get: { session.highRefreshRateEnabled },
-                        set: { session.setHighRefreshRateEnabled($0) }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("全介面 120 Hz").font(.subheadline.weight(.bold))
-                            Text("主畫面、抽球、彈窗、球體與特效都使用 ProMotion 更新率")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    .tint(.cyan)
-                }
-                .padding(14)
-                .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.08)))
-
-                VStack(alignment: .leading, spacing: 10) {
                     Text("我的球").font(.headline.weight(.black))
                     ForEach(BallStyle.allCases) { style in
                         BallRow(
@@ -400,13 +382,6 @@ private struct GameSettingsCard: View {
                 Label("震動", systemImage: "waveform.path")
             }
 
-            Toggle(isOn: Binding(
-                get: { session.highRefreshRateEnabled },
-                set: { session.setHighRefreshRateEnabled($0) }
-            )) {
-                Label("全介面 120 Hz", systemImage: "speedometer")
-            }
-
             Button(action: onHome) {
                 Label("回主畫面", systemImage: "house.fill")
                     .font(.headline.weight(.bold)).frame(maxWidth: .infinity).padding(.vertical, 10)
@@ -457,12 +432,8 @@ private struct GameBoardView: View {
                     .accessibilityLabel("Brick Rain game board. Drag to aim and release to fire.")
                     .onAppear {
                         scene.size = proxy.size
-                        scene.setHighRefreshRateEnabled(session.highRefreshRateEnabled)
                     }
                     .onChange(of: proxy.size) { _, newSize in scene.size = newSize }
-                    .onChange(of: session.highRefreshRateEnabled) { _, enabled in
-                        scene.setHighRefreshRateEnabled(enabled)
-                    }
                     .onChange(of: recoveryRequest) { _, _ in scene.clearBottomThreeRowsAndContinue() }
 
                 HStack(spacing: 10) {
